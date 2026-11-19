@@ -1,47 +1,96 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>mdwiki</title>
+<title>Own Wiki</title>
+<script>try{document.documentElement.dataset.theme=localStorage.getItem('theme')||'dark'}catch(e){}</script>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-logo" viewBox="0 0 24 24"><path fill="currentColor" d="M5 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a1 1 0 0 1 1-1zm1 2v14h11V5H6zm2 2h7v2H8V7z"/></symbol>
+  <symbol id="i-shelf" viewBox="0 0 24 24"><path fill="currentColor" d="M3 3h2v18H3zM19 3h2v18h-2zM7 5h2v14H7zm4 2h2v12h-2zm4-1h2v13h-2z"/></symbol>
+  <symbol id="i-book" viewBox="0 0 24 24"><path fill="currentColor" d="M5 3h13a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H6a2 2 0 0 1-2-2V4a1 1 0 0 1 1-1zm1 2v12.2A2 2 0 0 1 7 17h10V5H6z"/></symbol>
+  <symbol id="i-chapter" viewBox="0 0 24 24"><path fill="currentColor" d="M4 4h16v4H4zm0 6h16v4H4zm0 6h16v4H4z"/></symbol>
+  <symbol id="i-page" viewBox="0 0 24 24"><path fill="currentColor" d="M6 2h8l5 5v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1zm7 1.5V8h4.5L13 3.5z"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24"><path fill="currentColor" d="M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10zm0 2c-4.4 0-8 2.2-8 5v2h16v-2c0-2.8-3.6-5-8-5z"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><path fill="currentColor" d="M10 2a8 8 0 0 1 6.3 12.9l5.4 5.4-1.4 1.4-5.4-5.4A8 8 0 1 1 10 2zm0 2a6 6 0 1 0 0 12 6 6 0 0 0 0-12z"/></symbol>
+</svg>
+
 <div id="login" hidden>
   <form id="loginForm">
-    <h1>mdwiki</h1>
+    <svg class="logo-big"><use href="#i-logo"/></svg>
+    <h1>Own Wiki</h1>
     <input id="pw" type="password" placeholder="Password" autofocus autocomplete="current-password">
-    <button>Log in</button>
+    <button class="primary">Log in</button>
     <p id="loginErr"></p>
   </form>
 </div>
 
 <div id="app" hidden>
-  <aside>
-    <div class="bar">
-      <input id="search" placeholder="Search…">
+  <header id="top">
+    <a id="logo" href="#" title="Home"><svg><use href="#i-logo"/></svg><span>Own Wiki</span></a>
+    <div id="searchWrap">
+      <svg><use href="#i-search"/></svg>
+      <input id="search" placeholder="Search…" autocomplete="off">
     </div>
-    <div class="bar">
-      <button id="newPage">+ Page</button>
-      <button id="newFolder">+ Folder</button>
-      <button id="logout" title="Log out">⎋</button>
+    <nav id="topnav">
+      <button data-view="shelves"><svg><use href="#i-shelf"/></svg><span>Shelves</span></button>
+      <button data-view="books"><svg><use href="#i-book"/></svg><span>Books</span></button>
+      <button data-view="chapters"><svg><use href="#i-chapter"/></svg><span>Chapters</span></button>
+    </nav>
+    <div id="acct">
+      <button id="acctBtn" title="Account"><svg><use href="#i-user"/></svg></button>
+      <div id="acctMenu" hidden>
+        <button id="themeToggle">Switch to light mode</button>
+        <button id="logout">Log out</button>
+      </div>
     </div>
-    <div id="tree"></div>
-  </aside>
-  <main>
-    <div class="bar">
-      <span id="current">No page open</span>
-      <span id="status"></span>
-      <button id="rename" disabled>Rename</button>
-      <button id="delete" disabled>Delete</button>
-      <button id="save" disabled>Save (Ctrl+S)</button>
-    </div>
-    <div id="panes">
-      <textarea id="editor" disabled spellcheck="false"></textarea>
-      <!-- TODO (see GUIDE.md, Step 1): the live preview goes here -->
-      <div id="preview" hidden></div>
-    </div>
-  </main>
+  </header>
+
+  <div id="crumbs"></div>
+
+  <div id="layout">
+    <aside id="navSide">
+      <div class="side-title">Navigation</div>
+      <div id="tree"></div>
+    </aside>
+
+    <main id="content">
+      <div id="view"><p class="muted">No page open</p></div>
+
+      <div id="editorWrap" hidden>
+        <div class="bar">
+          <span id="current">No page open</span>
+          <span id="status"></span>
+          <div class="seg" id="modeSwitch">
+            <button data-mode="md" class="on">Markdown</button>
+            <button data-mode="split">Markdown + Preview</button>
+          </div>
+          <button id="save" class="primary" disabled>Save</button>
+          <button id="closeEdit">Close</button>
+        </div>
+        <div id="panes" class="md">
+          <textarea id="editor" disabled spellcheck="false"></textarea>
+          <div id="preview" class="md-body" hidden></div>
+        </div>
+      </div>
+    </main>
+
+    <aside id="actSide">
+      <div class="side-title">Details</div>
+      <div id="details" class="muted">–</div>
+      <div class="side-title">Actions</div>
+      <div id="actions">
+        <button id="edit" disabled>Edit</button>
+        <button id="newPage">New page</button>
+        <button id="newFolder">New folder</button>
+        <button id="rename" disabled>Rename / Move</button>
+        <button id="delete" class="danger" disabled>Delete</button>
+      </div>
+    </aside>
+  </div>
 </div>
 <script src="app.js"></script>
 </body>
