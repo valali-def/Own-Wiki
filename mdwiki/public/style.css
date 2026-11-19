@@ -122,3 +122,18 @@ aside { overflow: auto; padding: 14px 12px; }
 #view > h1.vh svg { width: 28px; height: 28px; }
 .card .hit { margin-top: 6px; }
 #crumbs a:not([data-p]) { cursor: default; color: var(--fg); }
+
+/* ===== Eckiger Look (CurseForge-Style), Farben unverändert ===== */
+*, *::before, *::after { border-radius: 0 !important; }
+#acctMenu { box-shadow: 4px 4px 0 rgba(0,0,0,.35); }
+
+/* ===== Eigene Dialoge ===== */
+.modal-back { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; background: rgba(0,0,0,.55); padding: 16px; }
+.modal { width: 100%; max-width: 420px; background: var(--panel); border: 1px solid var(--line); border-top: 4px solid var(--accent); padding: 20px; display: grid; gap: 14px; box-shadow: 6px 6px 0 rgba(0,0,0,.4); }
+.modal-msg { white-space: pre-wrap; overflow-wrap: anywhere; }
+.modal-input { width: 100%; padding: 8px 10px; }
+.modal-input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.modal-btns { display: flex; justify-content: flex-end; gap: 8px; }
+button.danger-solid { background: var(--danger); border-color: var(--danger); color: #fff; }
+button.danger-solid:hover:not(:disabled) { filter: brightness(1.1); background: var(--danger); }
+

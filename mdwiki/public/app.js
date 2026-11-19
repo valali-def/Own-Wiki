@@ -1,3 +1,48 @@
+/* ===== Eigene Dialoge (ersetzen prompt/confirm/alert) ===== */
+function uiDialog({ message, input, value, ok = "OK", cancel = "Cancel", danger = false, alertOnly = false }) {
+  return new Promise((resolve) => {
+    const wrap = document.createElement("div");
+    wrap.className = "modal-back";
+    wrap.innerHTML =
+      '<div class="modal" role="dialog" aria-modal="true">' +
+      '<div class="modal-msg"></div>' +
+      (input ? '<input class="modal-input" type="text" spellcheck="false">' : "") +
+      '<div class="modal-btns">' +
+      (alertOnly ? "" : '<button type="button" data-r="cancel"></button>') +
+      '<button type="button" data-r="ok" class="' + (danger ? "danger-solid" : "primary") + '"></button>' +
+      "</div></div>";
+    wrap.querySelector(".modal-msg").textContent = message;
+    const inp = wrap.querySelector(".modal-input");
+    if (inp) inp.value = value || "";
+    const bc = wrap.querySelector('[data-r="cancel"]');
+    if (bc) bc.textContent = cancel;
+    wrap.querySelector('[data-r="ok"]').textContent = ok;
+    const prevFocus = document.activeElement;
+    const done = (okRes) => {
+      document.removeEventListener("keydown", onKey, true);
+      wrap.remove();
+      if (prevFocus && prevFocus.focus) try { prevFocus.focus(); } catch (e) {}
+      resolve(okRes);
+    };
+    const result = (okRes) => done(input ? (okRes ? inp.value : null) : okRes);
+    const onKey = (e) => {
+      if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); result(false); }
+      else if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); result(true); }
+    };
+    document.addEventListener("keydown", onKey, true);
+    wrap.addEventListener("mousedown", (e) => { if (e.target === wrap) result(false); });
+    wrap.addEventListener("click", (e) => {
+      const b = e.target.closest("button[data-r]");
+      if (b) result(b.dataset.r === "ok");
+    });
+    document.body.appendChild(wrap);
+    if (inp) { inp.focus(); inp.select(); } else wrap.querySelector('[data-r="ok"]').focus();
+  });
+}
+const uiPrompt = (message, value) => uiDialog({ message, input: true, value });
+const uiConfirm = (message) => uiDialog({ message, ok: /delete/i.test(message) ? "Delete" : "OK", danger: /delete/i.test(message) });
+const uiAlert = (message) => uiDialog({ message, alertOnly: true });
+
 "use strict";
 const $ = (id) => document.getElementById(id);
 const esc = (s) =>
@@ -290,7 +335,7 @@ const all = () => [...index.values()];
 // ---- Navigation / views ----
 async function leaveEditor() {
   if (!editing) return true;
-  if (dirty && !confirm("Discard unsaved changes?")) return false;
+  if (dirty && !await uiConfirm("Discard unsaved changes?")) return false;
   editing = false;
   dirty = false;
   $("editorWrap").hidden = true;
@@ -306,7 +351,7 @@ async function go(path) {
     if (n.type === "page") return await showPage(n);
     showFolder(n);
   } catch (e) {
-    alert(e.message);
+    uiAlert(e.message);
   }
 }
 const setView = (html) => {
@@ -481,7 +526,7 @@ for (const b of document.querySelectorAll("#topnav button"))
 // ---- Actions ----
 $("newPage").onclick = async () => {
   const ctx = ctxFolder();
-  let name = prompt(
+  let name = await uiPrompt(
     "Name of the new page" + (ctx ? ` (in ${ctx.path})` : "") + ":",
   );
   if (!name) return;
@@ -494,13 +539,13 @@ $("newPage").onclick = async () => {
     await go(p);
     openEditor();
   } catch (e) {
-    alert(e.message);
+    uiAlert(e.message);
   }
 };
 $("newFolder").onclick = async () => {
   const ctx = ctxFolder(),
     what = $("newFolder").textContent.replace("New ", "");
-  const name = prompt(
+  const name = await uiPrompt(
     `Name of the new ${what}` + (ctx ? ` (in ${ctx.path})` : "") + ":",
   );
   if (!name) return;
@@ -511,13 +556,13 @@ $("newFolder").onclick = async () => {
     await refresh();
     await go(p);
   } catch (e) {
-    alert(e.message);
+    uiAlert(e.message);
   }
 };
 $("rename").onclick = async () => {
   const n = index.get(sel);
   if (!n) return;
-  let to = prompt("New path (rename or move):", n.path);
+  let to = await uiPrompt("New path (rename or move):", n.path);
   if (!to || to === n.path) return;
   if (!(await leaveEditor())) return;
   if (n.type === "page" && !/\.md$/i.test(to)) to += ".md";
@@ -526,14 +571,14 @@ $("rename").onclick = async () => {
     await refresh();
     await go(to);
   } catch (e) {
-    alert(e.message);
+    uiAlert(e.message);
   }
 };
 $("delete").onclick = async () => {
   const n = index.get(sel);
   if (!n) return;
   if (
-    !confirm(
+    !await uiConfirm(
       "Really delete: " +
         n.path +
         (n.type === "folder" ? " (including everything inside)" : "") +
@@ -547,7 +592,7 @@ $("delete").onclick = async () => {
     await refresh();
     await go(n.parent);
   } catch (e) {
-    alert(e.message);
+    uiAlert(e.message);
   }
 };
 
@@ -592,7 +637,7 @@ async function save() {
   setStatus("Saved " + new Date().toLocaleTimeString());
   renderDetails();
 }
-$("save").onclick = () => save().catch((x) => alert(x.message));
+$("save").onclick = () => save().catch((x) => uiAlert(x.message));
 let raf = 0;
 $("editor").addEventListener("input", () => {
   dirty = true;
@@ -606,7 +651,7 @@ $("editor").addEventListener("input", () => {
 document.addEventListener("keydown", (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key === "s" && editing) {
     e.preventDefault();
-    save().catch((x) => alert(x.message));
+    save().catch((x) => uiAlert(x.message));
   }
 });
 window.addEventListener("beforeunload", (e) => {
@@ -668,3 +713,4 @@ async function init() {
   }
 }
 api("GET", "/api/session").then(showApp).catch(showLogin);
+
