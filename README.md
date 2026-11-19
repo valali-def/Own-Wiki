@@ -3,6 +3,9 @@
 Single-user wiki for Markdown. One password, no database: all pages are plain `.md` files in a folder.
 Backup and export = copy the `data/` folder.
 
+Looks like a small book shelf: **Shelves → Books → Chapters → Pages**, with a flat, square design
+(sharp corners, light and dark theme).
+
 ## Getting started
 
 1. In `docker-compose.yml`, change the password at `APP_PASSWORD`.
@@ -13,18 +16,35 @@ Backup and export = copy the `data/` folder.
 Without Docker (for testing, Node 18+ required):
 `APP_PASSWORD=secret DATA_DIR=./data node server.js`
 
+## Try the design without a server (demo)
+
+Open **`demo/wiki-demo.html`** by double-clicking it. No server, no Node, no Docker needed.
+
+- It is the real interface (same `index.html`, `style.css`, `app.js`), but talks to a small fake backend in memory.
+- **Any password works** (only an empty field is rejected, so you can see the error message).
+- It comes with sample shelves, books, chapters and pages. Everything you change is gone after a reload.
+- After you change `public/style.css`, `public/index.html` or `public/app.js`, rebuild it:
+  `node demo/build.js`
+
+More details in **GUIDE.md**.
+
 ## Structure
 
 ```
-server.js          Backend (Node standard library only, no npm packages)
-public/index.html  User interface
-public/app.js      Frontend logic (login, tree, editor, search)
-public/style.css   Appearance (light/dark automatic)
+server.js            Backend (Node standard library only, no npm packages)
+public/index.html    User interface
+public/app.js        Frontend logic (login, tree, editor, search, own dialogs)
+public/style.css     Appearance (square design, light/dark switchable)
+demo/build.js        Builds the single-file demo from the files in public/
+demo/mock-api.js     Fake backend used only by the demo (replaces server.js)
+demo/wiki-demo.html  Ready-made demo, open it directly in the browser
 Dockerfile
 docker-compose.yml
-data/              your pages (created on startup, mounted as a volume)
-data/assets/       uploaded images
+data/                your pages (created on startup, mounted as a volume)
+data/assets/         uploaded images
 ```
+
+`demo/` is only for development. It is not needed in the Docker image.
 
 ## Configuration (environment variables)
 

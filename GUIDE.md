@@ -18,32 +18,107 @@ files on disk. Access only on the home network and via Tailscale, so no HTTPS of
   - Image upload (`POST /api/upload?name=x.png`, raw data in the body) to `data/assets/`, served at `/files/assets/...`
   - Protection against path tricks (`..`, dotfiles), `.md` pages only, uploads only for certain image types and PDF
 - **Docker**: `Dockerfile` and `docker-compose.yml` (volume `./data:/data`).
-- **Frontend (`public/`)**: login, folder tree, simple editor (text area), save with Ctrl+S, new/rename/delete, search.
+- **Frontend (`public/`)**:
+  - Login, top bar with search and the views Shelves / Books / Chapters, account menu (theme switch, log out)
+  - Shelves → Books → Chapters → Pages structure, breadcrumbs, side navigation, "Details" and "Actions" panels, cards
+  - Editor with two modes, "Markdown" and "Markdown + Preview" (the choice is remembered), save with Ctrl+S, unsaved-changes warning
+  - New page / new folder / rename or move / delete, full-text search
+  - **Own Markdown renderer** in `app.js` (no library): headings, bold, italic, strikethrough, inline code, code blocks, nested and numbered lists,
+    task lists, tables, blockquotes, links, images, horizontal rules. The text is HTML-escaped first, and `javascript:`/`data:` links are blocked.
+  - Dark/light theme (default dark), remembered in the browser
+  - The current page is kept in the URL hash (`#Technik/Homelab/Docker.md`), so reloading returns to it
+  - **Square design**: no rounded corners anywhere, colors unchanged (see "UI conventions")
+  - **Own dialogs** instead of the browser's pop-ups for new page/folder, rename, delete and error messages (see "UI conventions")
+- **Demo**: `demo/wiki-demo.html` runs the whole interface without a server (see "Testing the design without a server").
 
 ## What is NOT tested
 
-- The **frontend was only checked for syntax errors**, never opened in a browser. Expect small bugs, try it out first.
+- The **frontend was only checked for syntax errors and never run in a real browser** by the person/session that wrote it. Expect small bugs, try it out first
+  (the demo is the quickest way).
 - The **Docker image was never built**. Possible stumbling blocks: write permissions on `./data` (the container runs as UID 1000).
 - There was no network during development, so no library was deliberately installed.
+- Not covered by the demo: image upload (`/api/upload`), the login brake and real sessions.
+
+## UI conventions (read this before touching the frontend)
+
+### Structure: Shelves, Books, Chapters, Pages
+
+There is **no extra metadata**. The type of a folder comes only from its depth on disk:
+
+| Depth | Name | Example in `data/` |
+|---|---|---|
+| 1 | Shelf | `Technik/` |
+| 2 | Book | `Technik/Homelab/` |
+| 3 and deeper | Chapter | `Technik/Homelab/Server/` |
+| `.md` file anywhere | Page | `Technik/Homelab/Server/Docker.md` |
+
+This is computed in `buildIndex()` in `app.js`. Each type has its own color (`--c-shelf`, `--c-book`, `--c-chapter`, `--c-page`).
+
+### Colors and theme
+
+All colors are CSS variables at the top of `style.css`: one block for light (`:root`), one for dark (`[data-theme="dark"]`).
+Use the variables, never hard-coded colors, so both themes keep working. The accent color is `--accent`, danger is `--danger`.
+
+### Square design
+
+Rounded corners are switched off by **one global rule** at the end of `style.css`:
+
+```css
+*, *::before, *::after { border-radius: 0 !important; }
+```
+
+Do not add `border-radius` to new components, it would have no effect. Shadows are hard and offset (`4px 4px 0 …`), not soft.
+To bring back round corners, remove that one rule.
+
+### Own dialogs (never use `prompt`, `confirm` or `alert`)
+
+The browser's built-in pop-ups look different on every system and cannot be styled, so `app.js` has its own versions.
+They live at the top of `app.js`, their styles (`.modal`, `.modal-back`, …) at the end of `style.css`.
+
+| Instead of | Use | Returns |
+|---|---|---|
+| `prompt(text, value)` | `await uiPrompt(text, value)` | the entered text, or `null` if cancelled |
+| `confirm(text)` | `await uiConfirm(text)` | `true` / `false` |
+| `alert(text)` | `await uiAlert(text)` | nothing (closes with OK) |
+
+Rules:
+- They are **asynchronous**. The calling function must be `async`, and the call needs `await`. A native `confirm()` blocked the code, these do not.
+- Enter confirms, Esc or a click next to the dialog cancels.
+- A message containing the word "delete" gets a red "Delete" button.
+- The text is inserted as plain text, never as HTML.
+- The only native pop-up that remains is the browser's "leave this page?" warning (`beforeunload`). Browsers do not allow replacing it.
+
+## Testing the design without a server
+
+`demo/wiki-demo.html` is a single file with the real interface inside. Open it by double-clicking.
+
+- **Password:** anything except an empty field.
+- **Data:** sample shelves, books, chapters and pages (including an empty page, a page directly in a shelf, and an empty shelf `Archiv`),
+  with every supported Markdown element. All kept in memory, **reset on reload**.
+- **How it works:** `demo/mock-api.js` replaces `fetch()` for all `/api/...` addresses and answers from an in-memory object.
+  The files in `public/` are used unchanged.
+- **Rebuild after every frontend change:** `node demo/build.js` (reads `public/index.html`, `style.css`, `app.js` and `demo/mock-api.js`
+  and writes `demo/wiki-demo.html`).
+- **Keep it in sync:** if you add or change an endpoint in `server.js`, make the same change in `demo/mock-api.js`, otherwise the demo shows errors.
+- Never put the demo or `mock-api.js` into the Docker image. It has no real login.
 
 ## First test on the server (10 minutes)
 
 1. Run the README steps, open the page in the browser.
 2. Test login (wrong password, then the right one).
-3. Create a folder and a page, write text with `**bold**`, Ctrl+S, reload the page.
-4. Check that `data/Folder/Page.md` really exists on the server.
-5. Restart the container (`docker compose restart`): pages must still be there, login is required again.
+3. Create a shelf, a book and a page, write text with `**bold**`, Ctrl+S, reload the page.
+4. Check that `data/Shelf/Book/Page.md` really exists on the server.
+5. Try rename/move and delete: the own dialogs must appear, not the browser's.
+6. Restart the container (`docker compose restart`): pages must still be there, login is required again.
 
 ## Next steps (in this order)
 
-### Step 1: Live preview with GFM (most important item)
-- Library for rendering: **marked** (or markdown-it) plus **DOMPurify** to sanitize the HTML.
-- Files are served **locally**, not from a CDN, so it works offline on the home network: in the Dockerfile
-  `npm install marked dompurify`, or copy the ready-made browser bundles to `public/vendor/` and include them in `index.html`.
-- In `app.js`, on `input` in the editor, set `preview.innerHTML = DOMPurify.sanitize(marked.parse(text, { gfm: true }))`
-  and make `#preview` visible (it already exists as a hidden placeholder in `index.html`).
-- Tables, task lists and strikethrough are included in `marked` with `gfm: true`.
-- Optional: toggle "Editor only / Split / Preview only".
+### Step 1: Decide on the Markdown renderer
+- Done already: live preview in the editor ("Markdown + Preview") with the **own renderer in `app.js`**.
+- Missing compared to full GFM: nested blockquotes in lists, footnotes, autolinks, HTML escaping edge cases, line breaks inside paragraphs.
+- Option A: keep the own renderer (no dependencies, small). Option B: switch to **marked** plus **DOMPurify** (`marked.parse(text, { gfm: true })`).
+  Serve the files **locally** (`public/vendor/`), not from a CDN, so it works offline on the home network.
+- If you switch, replace only the `md()` function and keep the "escape or sanitize first" rule. Update the demo build too.
 
 ### Step 2: Better editor
 - Replace the `<textarea>` with **CodeMirror 6** (Markdown syntax colors, indentation, brackets).
@@ -53,13 +128,14 @@ files on disk. Access only on the home network and via Tailscale, so no HTTPS of
 - The backend is done (`/api/upload`). In the frontend, catch `paste` and `drop` events in the editor,
   send the file with `fetch('/api/upload?name=' + name, { method: 'POST', body: file })`,
   and insert the returned `markdown` line at the cursor position.
+- Add `/api/upload` to `demo/mock-api.js` (for example by returning a data URL) so it can be tried in the demo.
 
 ### Step 4: Convenience
-- Make folders in the tree collapsible/expandable, remember the current page in the URL hash (`#Linux/Docker.md`).
+- Make folders in the tree collapsible/expandable (the side navigation currently always shows the whole current book).
 - Move pages and folders in the tree via drag-and-drop (backend `/api/rename` is done).
 - Automatic saving after a few seconds of pause.
 - Links between pages, e.g. `[[PageName]]`.
-- Dark/light is already automatic via CSS, optionally add a toggle.
+- Already done: current page in the URL hash, dark/light toggle.
 
 ### Step 5: Export and backup
 - Endpoint `GET /api/export` that delivers the data folder as `.tar.gz` or `.zip` (without a library, using the `tar` command
@@ -79,7 +155,10 @@ files on disk. Access only on the home network and via Tailscale, so no HTTPS of
 - **One password, one user.** Do not add user management.
 - **Images live in `data/assets/`** and are embedded with paths like `/files/assets/name.png`.
 - **All file access goes through `safePath()`** in `server.js`. New endpoints must use it as well.
-- **Never display Markdown as unfiltered HTML** (DOMPurify), even if only I write.
+- **Never display Markdown as unfiltered HTML.** Escape or sanitize first (the own renderer escapes, with a library use DOMPurify), even if only I write.
+- **Shelf/Book/Chapter come from folder depth**, not from extra files or a database.
+- **Square design and own dialogs** (see "UI conventions"): no `border-radius`, no `prompt`/`confirm`/`alert`.
+- **Keep the demo in sync** with the frontend and the API.
 
 ## API quick reference
 
