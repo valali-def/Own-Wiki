@@ -1,0 +1,12 @@
+services:
+  mdwiki:
+    build: .
+    container_name: mdwiki
+    restart: unless-stopped
+    ports:
+      - "3000:3000"          # left = port on the server, change if needed
+    environment:
+      APP_PASSWORD: "PUT-A-LONG-PASSWORD-HERE"
+      # COOKIE_SECURE: "true"   # only enable if you use HTTPS (e.g. tailscale serve)
+    volumes:
+      - ./data:/data          # all pages live here as .md files

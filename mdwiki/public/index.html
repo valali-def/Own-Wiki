@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>mdwiki</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="login" hidden>
+  <form id="loginForm">
+    <h1>mdwiki</h1>
+    <input id="pw" type="password" placeholder="Password" autofocus autocomplete="current-password">
+    <button>Log in</button>
+    <p id="loginErr"></p>
+  </form>
+</div>
+
+<div id="app" hidden>
+  <aside>
+    <div class="bar">
+      <input id="search" placeholder="Search…">
+    </div>
+    <div class="bar">
+      <button id="newPage">+ Page</button>
+      <button id="newFolder">+ Folder</button>
+      <button id="logout" title="Log out">⎋</button>
+    </div>
+    <div id="tree"></div>
+  </aside>
+  <main>
+    <div class="bar">
+      <span id="current">No page open</span>
+      <span id="status"></span>
+      <button id="rename" disabled>Rename</button>
+      <button id="delete" disabled>Delete</button>
+      <button id="save" disabled>Save (Ctrl+S)</button>
+    </div>
+    <div id="panes">
+      <textarea id="editor" disabled spellcheck="false"></textarea>
+      <!-- TODO (see GUIDE.md, Step 1): the live preview goes here -->
+      <div id="preview" hidden></div>
+    </div>
+  </main>
+</div>
+<script src="app.js"></script>
+</body>
+</html>

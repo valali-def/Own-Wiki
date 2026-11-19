@@ -1,99 +1,99 @@
-# GUIDE: Stand und nächste Schritte
+# GUIDE: Status and next steps
 
-Dieses Dokument ist für alle, die das Projekt weiterbauen (auch für eine neue Claude-Sitzung).
-Einfach dieses Projekt hochladen und sagen: "Mach bei Schritt 1 in GUIDE.md weiter."
+This document is for anyone who continues building the project (including a new Claude session).
+Just upload this project and say: "Continue with Step 1 in GUIDE.md."
 
-## Ziel
+## Goal
 
-Ähnlich wie BookStack, aber: nur ich als Nutzer, nur Markdown (GitHub Flavored Markdown), keine Datenbank,
-Dateien auf der Platte. Zugriff nur im Heimnetz und über Tailscale, deshalb kein eigenes HTTPS nötig.
+Similar to BookStack, but: just me as the user, Markdown only (GitHub Flavored Markdown), no database,
+files on disk. Access only on the home network and via Tailscale, so no HTTPS of its own is needed.
 
-## Was fertig ist
+## What is done
 
-- **Backend (`server.js`)**, ohne Abhängigkeiten, die Logik wurde mit curl getestet:
-  - Passwort-Login (`POST /api/login`), Session-Cookie (HttpOnly, SameSite=Strict), Bremse bei Fehlversuchen (1 s, 2 s, 4 s … max. 30 s, global)
-  - Seiten lesen/schreiben (`GET/PUT /api/page`), Schreiben atomar (Temp-Datei + rename)
-  - Ordner anlegen, umbenennen/verschieben, löschen
-  - Baum (`GET /api/tree`), Volltextsuche (`GET /api/search?q=`, einfacher Datei-Scan, reicht für private Mengen)
-  - Bild-Upload (`POST /api/upload?name=x.png`, Rohdaten im Body) nach `data/assets/`, ausgeliefert unter `/files/assets/...`
-  - Schutz gegen Pfad-Tricks (`..`, Punkt-Dateien), nur `.md`-Seiten, Upload nur für bestimmte Bildtypen und PDF
-- **Docker**: `Dockerfile` und `docker-compose.yml` (Volume `./data:/data`).
-- **Frontend (`public/`)**: Login, Ordnerbaum, einfacher Editor (Textfeld), Speichern mit Strg+S, Neu/Umbenennen/Löschen, Suche.
+- **Backend (`server.js`)**, no dependencies, logic tested with curl:
+  - Password login (`POST /api/login`), session cookie (HttpOnly, SameSite=Strict), brake on failed attempts (1 s, 2 s, 4 s … max. 30 s, global)
+  - Read/write pages (`GET/PUT /api/page`), atomic writes (temp file + rename)
+  - Create, rename/move and delete folders
+  - Tree (`GET /api/tree`), full-text search (`GET /api/search?q=`, simple file scan, enough for private amounts of data)
+  - Image upload (`POST /api/upload?name=x.png`, raw data in the body) to `data/assets/`, served at `/files/assets/...`
+  - Protection against path tricks (`..`, dotfiles), `.md` pages only, uploads only for certain image types and PDF
+- **Docker**: `Dockerfile` and `docker-compose.yml` (volume `./data:/data`).
+- **Frontend (`public/`)**: login, folder tree, simple editor (text area), save with Ctrl+S, new/rename/delete, search.
 
-## Was NICHT getestet ist
+## What is NOT tested
 
-- Das **Frontend wurde nur auf Syntaxfehler geprüft**, nie in einem Browser geöffnet. Erwartet kleine Fehler, zuerst ausprobieren.
-- Das **Docker-Image wurde nie gebaut**. Mögliche Stolpersteine: Schreibrechte auf `./data` (Container läuft als UID 1000).
-- Es gab bei der Entwicklung kein Netzwerk, deshalb wurde bewusst keine Bibliothek installiert.
+- The **frontend was only checked for syntax errors**, never opened in a browser. Expect small bugs, try it out first.
+- The **Docker image was never built**. Possible stumbling blocks: write permissions on `./data` (the container runs as UID 1000).
+- There was no network during development, so no library was deliberately installed.
 
-## Erster Test auf dem Server (10 Minuten)
+## First test on the server (10 minutes)
 
-1. README-Schritte ausführen, Seite im Browser öffnen.
-2. Login testen (falsches Passwort, dann richtiges).
-3. Ordner und Seite anlegen, Text mit `**fett**` schreiben, Strg+S, Seite neu laden.
-4. Prüfen, dass `data/Ordner/Seite.md` auf dem Server wirklich existiert.
-5. Container neu starten (`docker compose restart`): Seiten müssen noch da sein, Login wird neu verlangt.
+1. Run the README steps, open the page in the browser.
+2. Test login (wrong password, then the right one).
+3. Create a folder and a page, write text with `**bold**`, Ctrl+S, reload the page.
+4. Check that `data/Folder/Page.md` really exists on the server.
+5. Restart the container (`docker compose restart`): pages must still be there, login is required again.
 
-## Nächste Schritte (in dieser Reihenfolge)
+## Next steps (in this order)
 
-### Schritt 1: Live-Vorschau mit GFM (wichtigster Punkt)
-- Bibliothek zum Rendern: **marked** (oder markdown-it) plus **DOMPurify** zum Bereinigen des HTML.
-- Dateien werden **lokal ausgeliefert**, nicht von einem CDN, damit es offline im Heimnetz geht: im Dockerfile
-  `npm install marked dompurify` bzw. die fertigen Browser-Bundles nach `public/vendor/` kopieren und in `index.html` einbinden.
-- In `app.js` bei `input` im Editor `preview.innerHTML = DOMPurify.sanitize(marked.parse(text, { gfm: true }))` setzen,
-  `#preview` sichtbar machen (steht bereits als versteckter Platzhalter in `index.html`).
-- Tabellen, Aufgabenlisten, Durchgestrichen sind in `marked` mit `gfm: true` dabei.
-- Optional: Umschalter "Nur Editor / Geteilt / Nur Vorschau".
+### Step 1: Live preview with GFM (most important item)
+- Library for rendering: **marked** (or markdown-it) plus **DOMPurify** to sanitize the HTML.
+- Files are served **locally**, not from a CDN, so it works offline on the home network: in the Dockerfile
+  `npm install marked dompurify`, or copy the ready-made browser bundles to `public/vendor/` and include them in `index.html`.
+- In `app.js`, on `input` in the editor, set `preview.innerHTML = DOMPurify.sanitize(marked.parse(text, { gfm: true }))`
+  and make `#preview` visible (it already exists as a hidden placeholder in `index.html`).
+- Tables, task lists and strikethrough are included in `marked` with `gfm: true`.
+- Optional: toggle "Editor only / Split / Preview only".
 
-### Schritt 2: Besserer Editor
-- Das `<textarea>` durch **CodeMirror 6** ersetzen (Markdown-Syntaxfarben, Einrückung, Klammern).
-- Tastenkürzel: Strg+B für fett, Strg+I für kursiv, Strg+K für Link.
+### Step 2: Better editor
+- Replace the `<textarea>` with **CodeMirror 6** (Markdown syntax colors, indentation, brackets).
+- Keyboard shortcuts: Ctrl+B for bold, Ctrl+I for italic, Ctrl+K for link.
 
-### Schritt 3: Bilder per Drag-and-drop und Einfügen
-- Das Backend ist fertig (`/api/upload`). Im Frontend `paste`- und `drop`-Ereignisse im Editor abfangen,
-  Datei per `fetch('/api/upload?name=' + name, { method: 'POST', body: file })` senden,
-  die zurückgegebene Zeile `markdown` an der Cursorposition einfügen.
+### Step 3: Images via drag-and-drop and paste
+- The backend is done (`/api/upload`). In the frontend, catch `paste` and `drop` events in the editor,
+  send the file with `fetch('/api/upload?name=' + name, { method: 'POST', body: file })`,
+  and insert the returned `markdown` line at the cursor position.
 
-### Schritt 4: Komfort
-- Ordner im Baum ein-/ausklappbar machen, aktuelle Seite im URL-Hash merken (`#Linux/Docker.md`).
-- Seiten und Ordner per Drag-and-drop im Baum verschieben (Backend `/api/rename` ist fertig).
-- Automatisches Speichern nach ein paar Sekunden Pause.
-- Links zwischen Seiten, z. B. `[[Seitenname]]`.
-- Dark/Light ist per CSS schon automatisch, optional ein Schalter.
+### Step 4: Convenience
+- Make folders in the tree collapsible/expandable, remember the current page in the URL hash (`#Linux/Docker.md`).
+- Move pages and folders in the tree via drag-and-drop (backend `/api/rename` is done).
+- Automatic saving after a few seconds of pause.
+- Links between pages, e.g. `[[PageName]]`.
+- Dark/light is already automatic via CSS, optionally add a toggle.
 
-### Schritt 5: Export und Backup
-- Endpunkt `GET /api/export`, der den Datenordner als `.tar.gz` oder `.zip` liefert (ohne Bibliothek mit dem `tar`-Befehl
-  im Alpine-Image über `child_process`).
-- Backup auf dem Server einfach per Cron: `tar czf backup-$(date +%F).tar.gz data/`.
-- Optional: `data/` als Git-Repo führen für eine Versionshistorie.
+### Step 5: Export and backup
+- Endpoint `GET /api/export` that delivers the data folder as `.tar.gz` or `.zip` (without a library, using the `tar` command
+  in the Alpine image via `child_process`).
+- Backup on the server simply via cron: `tar czf backup-$(date +%F).tar.gz data/`.
+- Optional: keep `data/` as a Git repo for a version history.
 
-### Schritt 6: Optionale Extras
-- Fußnoten, Mathe (KaTeX), Mermaid-Diagramme in der Vorschau.
-- Persistente Sessions (Tokens in einer Datei unter `data/.sessions.json` speichern), damit ein Neustart nicht abmeldet.
-- HTTPS über `tailscale serve`, danach `COOKIE_SECURE=true` setzen.
+### Step 6: Optional extras
+- Footnotes, math (KaTeX), Mermaid diagrams in the preview.
+- Persistent sessions (store tokens in a file under `data/.sessions.json`) so that a restart doesn't log you out.
+- HTTPS via `tailscale serve`, then set `COOKIE_SECURE=true`.
 
-## Wichtige Entwurfsentscheidungen (bitte beibehalten)
+## Important design decisions (please keep)
 
-- **Keine Datenbank.** Dateien auf der Platte sind die einzige Wahrheit. Der Suchindex darf höchstens im Speicher liegen.
-- **Nur Markdown**, kein WYSIWYG. So gibt es keine verlustbehaftete Umwandlung wie bei BookStack.
-- **Ein Passwort, ein Nutzer.** Keine Benutzerverwaltung einbauen.
-- **Bilder liegen in `data/assets/`** und werden mit Pfaden wie `/files/assets/name.png` eingebunden.
-- **Alle Dateizugriffe laufen über `safePath()`** in `server.js`. Neue Endpunkte müssen es ebenfalls nutzen.
-- **Markdown nie ungefiltert als HTML anzeigen** (DOMPurify), auch wenn nur ich schreibe.
+- **No database.** Files on disk are the only source of truth. The search index may at most live in memory.
+- **Markdown only**, no WYSIWYG. This avoids lossy conversion as with BookStack.
+- **One password, one user.** Do not add user management.
+- **Images live in `data/assets/`** and are embedded with paths like `/files/assets/name.png`.
+- **All file access goes through `safePath()`** in `server.js`. New endpoints must use it as well.
+- **Never display Markdown as unfiltered HTML** (DOMPurify), even if only I write.
 
-## API-Kurzreferenz
+## API quick reference
 
-| Methode | Pfad | Zweck |
+| Method | Path | Purpose |
 |---|---|---|
 | POST | `/api/login` | `{password}` |
-| POST | `/api/logout` | Abmelden |
-| GET | `/api/session` | prüft, ob eingeloggt |
-| GET | `/api/tree` | Baum aus Ordnern und Seiten |
-| GET | `/api/page?path=A/B.md` | Seite lesen |
-| PUT | `/api/page` | `{path, content}` speichern/anlegen |
-| POST | `/api/folder` | `{path}` Ordner anlegen |
-| POST | `/api/rename` | `{from, to}` umbenennen/verschieben |
-| DELETE | `/api/item?path=` | Seite oder Ordner löschen |
-| GET | `/api/search?q=` | Volltextsuche |
-| POST | `/api/upload?name=x.png` | Bild hochladen (Rohdaten im Body) |
-| GET | `/files/assets/x.png` | Datei ausliefern (nie `.md`) |
+| POST | `/api/logout` | Log out |
+| GET | `/api/session` | checks whether logged in |
+| GET | `/api/tree` | Tree of folders and pages |
+| GET | `/api/page?path=A/B.md` | Read page |
+| PUT | `/api/page` | `{path, content}` save/create |
+| POST | `/api/folder` | `{path}` create folder |
+| POST | `/api/rename` | `{from, to}` rename/move |
+| DELETE | `/api/item?path=` | Delete page or folder |
+| GET | `/api/search?q=` | Full-text search |
+| POST | `/api/upload?name=x.png` | Upload image (raw data in the body) |
+| GET | `/files/assets/x.png` | Serve file (never `.md`) |

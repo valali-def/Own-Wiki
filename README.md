@@ -1,40 +1,40 @@
 # mdwiki
 
-Einzelnutzer-Wiki für Markdown. Ein Passwort, keine Datenbank: Alle Seiten sind normale `.md`-Dateien in einem Ordner.
-Backup und Export = den Ordner `data/` kopieren.
+Single-user wiki for Markdown. One password, no database: all pages are plain `.md` files in a folder.
+Backup and export = copy the `data/` folder.
 
-## Starten
+## Getting started
 
-1. In `docker-compose.yml` das Passwort bei `APP_PASSWORD` ändern.
-2. `mkdir -p data && sudo chown 1000:1000 data` (der Container läuft als Benutzer `node`, UID 1000).
+1. In `docker-compose.yml`, change the password at `APP_PASSWORD`.
+2. `mkdir -p data && sudo chown 1000:1000 data` (the container runs as user `node`, UID 1000).
 3. `docker compose up -d --build`
-4. Im Browser `http://SERVER-IP:3000` öffnen und Passwort eingeben.
+4. Open `http://SERVER-IP:3000` in your browser and enter the password.
 
-Ohne Docker (zum Testen, Node 18+ nötig):
-`APP_PASSWORD=geheim DATA_DIR=./data node server.js`
+Without Docker (for testing, Node 18+ required):
+`APP_PASSWORD=secret DATA_DIR=./data node server.js`
 
-## Aufbau
+## Structure
 
 ```
-server.js          Backend (nur Node-Standardbibliothek, keine npm-Pakete)
-public/index.html  Oberfläche
-public/app.js      Frontend-Logik (Login, Baum, Editor, Suche)
-public/style.css   Aussehen (Hell/Dunkel automatisch)
+server.js          Backend (Node standard library only, no npm packages)
+public/index.html  User interface
+public/app.js      Frontend logic (login, tree, editor, search)
+public/style.css   Appearance (light/dark automatic)
 Dockerfile
 docker-compose.yml
-data/              deine Seiten (wird beim Start angelegt, per Volume eingebunden)
-data/assets/       hochgeladene Bilder
+data/              your pages (created on startup, mounted as a volume)
+data/assets/       uploaded images
 ```
 
-## Konfiguration (Umgebungsvariablen)
+## Configuration (environment variables)
 
-| Variable | Standard | Bedeutung |
+| Variable | Default | Meaning |
 |---|---|---|
-| `APP_PASSWORD` | (Pflicht) | Das einzige Passwort |
-| `PORT` | 3000 | Port im Container |
-| `DATA_DIR` | `./data` (im Image `/data`) | Ordner mit den Seiten |
-| `COOKIE_SECURE` | false | Auf `true` setzen, sobald HTTPS davor ist (z. B. `tailscale serve`), sonst klappt der Login über HTTP nicht |
+| `APP_PASSWORD` | (required) | The one and only password |
+| `PORT` | 3000 | Port inside the container |
+| `DATA_DIR` | `./data` (`/data` in the image) | Folder containing the pages |
+| `COOKIE_SECURE` | false | Set to `true` as soon as HTTPS is in front (e.g. `tailscale serve`), otherwise login over HTTP won't work |
 
-Sitzungen liegen im Speicher: Nach einem Neustart des Containers musst du dich neu anmelden.
+Sessions are kept in memory: after a container restart you have to log in again.
 
-Weiter geht es mit **GUIDE.md**.
+Continue with **GUIDE.md**.
