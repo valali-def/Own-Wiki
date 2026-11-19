@@ -116,3 +116,9 @@ aside { overflow: auto; padding: 14px 12px; }
   #layout { grid-template-columns: 1fr; } #navSide { display: none; }
   #topnav span, #logo span { display: none; } #view { margin: 0; border-radius: 0; padding: 18px; }
 }
+
+/* views */
+#view > h1.vh { margin: 0 0 4px; font-size: 28px; display: flex; gap: 10px; align-items: center; }
+#view > h1.vh svg { width: 28px; height: 28px; }
+.card .hit { margin-top: 6px; }
+#crumbs a:not([data-p]) { cursor: default; color: var(--fg); }
