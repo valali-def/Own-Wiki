@@ -1,7 +1,7 @@
 # GUIDE: Status and next steps
 
 This document is for anyone who continues building the project (including a new Claude session).
-Just upload this project and say: "Continue with Step 1 in GUIDE.md."
+Just upload this project and say: "Continue with Step 2 in GUIDE.md."
 
 ## Goal
 
@@ -23,8 +23,9 @@ files on disk. Access only on the home network and via Tailscale, so no HTTPS of
   - Shelves → Books → Chapters → Pages structure, breadcrumbs, side navigation, "Details" and "Actions" panels, cards
   - Editor with two modes, "Markdown" and "Markdown + Preview" (the choice is remembered), save with Ctrl+S, unsaved-changes warning
   - New page / new folder / rename or move / delete, full-text search
-  - **Own Markdown renderer** in `app.js` (no library): headings, bold, italic, strikethrough, inline code, code blocks, nested and numbered lists,
-    task lists, tables, blockquotes, links, images, horizontal rules. The text is HTML-escaped first, and `javascript:`/`data:` links are blocked.
+  - **Markdown renderer = `marked`** (GFM), served locally from `public/vendor/marked.umd.js` (works offline). `md()` in `app.js` is a thin wrapper:
+    raw HTML in the text is **escaped, not rendered**, and link/image addresses must pass `safeUrl()` (only http, https, mailto, tel, relative paths, `#anchors`).
+    If the library fails to load, the page shows the plain text instead of breaking. Tested with `node test/render.js` (features + XSS attempts).
   - Dark/light theme (default dark), remembered in the browser
   - The current page is kept in the URL hash (`#Technik/Homelab/Docker.md`), so reloading returns to it
   - **Square design**: no rounded corners anywhere, colors unchanged (see "UI conventions")
@@ -33,8 +34,9 @@ files on disk. Access only on the home network and via Tailscale, so no HTTPS of
 
 ## What is NOT tested
 
-- The **frontend was only checked for syntax errors and never run in a real browser** by the person/session that wrote it. Expect small bugs, try it out first
-  (the demo is the quickest way).
+- The frontend **has now been run once in headless Chromium** against the real server: login (wrong and right password), opening a page from the URL hash,
+  rendering, editor with live preview, Ctrl+S, reload. No JavaScript errors, no native pop-ups, XSS attempts stayed text.
+  **Still never tried in a browser:** new page / new folder / rename / delete dialogs, search, image upload, the mobile layout, the theme switch.
 - The **Docker image was never built**. Possible stumbling blocks: write permissions on `./data` (the container runs as UID 1000).
 - There was no network during development, so no library was deliberately installed.
 - Not covered by the demo: image upload (`/api/upload`), the login brake and real sessions.
@@ -109,16 +111,17 @@ Rules:
 3. Create a shelf, a book and a page, write text with `**bold**`, Ctrl+S, reload the page.
 4. Check that `data/Shelf/Book/Page.md` really exists on the server.
 5. Try rename/move and delete: the own dialogs must appear, not the browser's.
-6. Restart the container (`docker compose restart`): pages must still be there, login is required again.
+6. Restart the container (`docker compose restart`): pages must still be there and you stay logged in (sessions are stored in `data/.sessions.json`).
 
 ## Next steps (in this order)
 
-### Step 1: Decide on the Markdown renderer
-- Done already: live preview in the editor ("Markdown + Preview") with the **own renderer in `app.js`**.
-- Missing compared to full GFM: nested blockquotes in lists, footnotes, autolinks, HTML escaping edge cases, line breaks inside paragraphs.
-- Option A: keep the own renderer (no dependencies, small). Option B: switch to **marked** plus **DOMPurify** (`marked.parse(text, { gfm: true })`).
-  Serve the files **locally** (`public/vendor/`), not from a CDN, so it works offline on the home network.
-- If you switch, replace only the `md()` function and keep the "escape or sanitize first" rule. Update the demo build too.
+### Step 1: Markdown renderer. DONE (option B, without DOMPurify)
+- Switched to **marked** 18.0.10, served locally (`public/vendor/marked.umd.js`, licence next to it). Only `md()` changed.
+- DOMPurify was not available offline. Instead the marked renderer escapes every raw HTML token and checks every URL (see `safeUrl()`), which blocks the same attacks.
+- Now supported: nested blockquotes and code in lists, autolinks, hard line breaks, escaped characters, table alignment, `_underscore_` emphasis.
+- Not supported (marked has no footnotes): footnotes. They are in Step 6 as an optional extra (needs a marked extension).
+- If you change `md()`: run `node test/render.js` and keep the "escape first" rule.
+- The demo build (`demo/build.js`) must now also include `public/vendor/marked.umd.js` before `app.js`. **The `demo/` folder was missing from the uploaded zip, so this is not done.**
 
 ### Step 2: Better editor
 - Replace the `<textarea>` with **CodeMirror 6** (Markdown syntax colors, indentation, brackets).
@@ -137,7 +140,7 @@ Rules:
 - Links between pages, e.g. `[[PageName]]`.
 - Already done: current page in the URL hash, dark/light toggle.
 
-### Step 5: Export and backup
+### Step 5: Export and backup (export endpoint already DONE: `GET /api/export` returns a .tar.gz, covered by `test/smoke.js`; there is no button for it in the UI yet)
 - Endpoint `GET /api/export` that delivers the data folder as `.tar.gz` or `.zip` (without a library, using the `tar` command
   in the Alpine image via `child_process`).
 - Backup on the server simply via cron: `tar czf backup-$(date +%F).tar.gz data/`.
@@ -145,7 +148,7 @@ Rules:
 
 ### Step 6: Optional extras
 - Footnotes, math (KaTeX), Mermaid diagrams in the preview.
-- Persistent sessions (store tokens in a file under `data/.sessions.json`) so that a restart doesn't log you out.
+- (Persistent sessions are already done, see `.sessions.json` and the graceful shutdown in `server.js`.)
 - HTTPS via `tailscale serve`, then set `COOKIE_SECURE=true`.
 
 ## Important design decisions (please keep)
@@ -155,7 +158,7 @@ Rules:
 - **One password, one user.** Do not add user management.
 - **Images live in `data/assets/`** and are embedded with paths like `/files/assets/name.png`.
 - **All file access goes through `safePath()`** in `server.js`. New endpoints must use it as well.
-- **Never display Markdown as unfiltered HTML.** Escape or sanitize first (the own renderer escapes, with a library use DOMPurify), even if only I write.
+- **Never display Markdown as unfiltered HTML.** Raw HTML is escaped in the `html` renderer of `md()` and URLs go through `safeUrl()`, even if only I write.
 - **Shelf/Book/Chapter come from folder depth**, not from extra files or a database.
 - **Square design and own dialogs** (see "UI conventions"): no `border-radius`, no `prompt`/`confirm`/`alert`.
 - **Keep the demo in sync** with the frontend and the API.

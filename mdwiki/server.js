@@ -5,6 +5,7 @@ const fs = require('fs');
 const fsp = fs.promises;
 const path = require('path');
 const crypto = require('crypto');
+const { spawn } = require('child_process');
 
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const DATA_DIR = path.resolve(process.env.DATA_DIR || './data');
@@ -18,8 +19,26 @@ if (!PASSWORD) { console.error('APP_PASSWORD is not set. Aborting.'); process.ex
 fs.mkdirSync(DATA_DIR, { recursive: true });
 
 // ---------- Auth ----------
-const sessions = new Map(); // token -> expiry time (memory only; restart = log in again)
+// Sessions survive restarts: stored as SHA-256 hashes of the token in DATA_DIR/.sessions.json (dotfile, hidden from the wiki).
+const SESSION_FILE = path.join(DATA_DIR, '.sessions.json');
+const sessions = new Map(); // sha256(token) hex -> expiry time
 const sha = s => crypto.createHash('sha256').update(s).digest();
+const tokenKey = t => sha(String(t)).toString('hex');
+try {
+  const saved = JSON.parse(fs.readFileSync(SESSION_FILE, 'utf8'));
+  for (const [k, exp] of Object.entries(saved)) if (typeof exp === 'number' && exp > Date.now()) sessions.set(k, exp);
+} catch { /* no file yet or unreadable: start with no sessions */ }
+let saveTimer = null;
+function saveSessions() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    for (const [k, exp] of sessions) if (exp < Date.now()) sessions.delete(k);
+    const tmp = SESSION_FILE + '.tmp-' + process.pid;
+    fsp.writeFile(tmp, JSON.stringify(Object.fromEntries(sessions)), { mode: 0o600 })
+      .then(() => fsp.rename(tmp, SESSION_FILE))
+      .catch(e => console.error('Could not save sessions:', e.message));
+  }, 200);
+}
 const passwordOk = p => crypto.timingSafeEqual(sha(String(p)), sha(PASSWORD));
 
 let failures = 0, lockedUntil = 0; // simple global brake against guessing
@@ -27,15 +46,16 @@ function parseCookies(req) {
   const out = {};
   (req.headers.cookie || '').split(';').forEach(c => {
     const i = c.indexOf('=');
-    if (i > 0) out[c.slice(0, i).trim()] = decodeURIComponent(c.slice(i + 1).trim());
+    if (i > 0) { const v = c.slice(i + 1).trim(); try { out[c.slice(0, i).trim()] = decodeURIComponent(v); } catch { out[c.slice(0, i).trim()] = v; } }
   });
   return out;
 }
 function isAuthed(req) {
   const t = parseCookies(req).sid;
-  const exp = t && sessions.get(t);
+  const k = t && tokenKey(t);
+  const exp = k && sessions.get(k);
   if (!exp) return false;
-  if (exp < Date.now()) { sessions.delete(t); return false; }
+  if (exp < Date.now()) { sessions.delete(k); saveSessions(); return false; }
   return true;
 }
 
@@ -49,6 +69,7 @@ function safePath(rel) {
   if (abs !== DATA_DIR && !abs.startsWith(DATA_DIR + path.sep)) throw httpErr(400, 'Invalid path');
   return abs;
 }
+const dec = s => { try { return decodeURIComponent(s); } catch { throw httpErr(400, 'Bad URL'); } };
 function httpErr(status, msg) { const e = new Error(msg); e.status = status; return e; }
 const requireMd = rel => { if (!/\.md$/i.test(rel)) throw httpErr(400, 'Pages must end in .md'); };
 
@@ -137,7 +158,8 @@ async function handle(req, res) {
     if (typeof password === 'string' && passwordOk(password)) {
       failures = 0;
       const t = crypto.randomBytes(32).toString('hex');
-      sessions.set(t, Date.now() + SESSION_MS);
+      sessions.set(tokenKey(t), Date.now() + SESSION_MS);
+      saveSessions();
       const cookie = `sid=${t}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${SESSION_MS / 1000}` + (COOKIE_SECURE ? '; Secure' : '');
       return send(res, 200, { ok: true }, { 'Set-Cookie': cookie });
     }
@@ -146,13 +168,13 @@ async function handle(req, res) {
     return send(res, 401, { error: 'Wrong password' });
   }
   if (p === '/api/logout' && m === 'POST') {
-    const t = parseCookies(req).sid; if (t) sessions.delete(t);
+    const t = parseCookies(req).sid; if (t) { sessions.delete(tokenKey(t)); saveSessions(); }
     return send(res, 200, { ok: true }, { 'Set-Cookie': 'sid=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0' });
   }
 
   // Static frontend files (the login page must load without logging in)
   if (m === 'GET' && !p.startsWith('/api/') && !p.startsWith('/files/')) {
-    const name = p === '/' ? 'index.html' : p.slice(1);
+    const name = p === '/' ? 'index.html' : dec(p.slice(1));
     const abs = path.resolve(PUBLIC_DIR, name);
     if (!abs.startsWith(PUBLIC_DIR + path.sep)) return send(res, 400, 'Invalid');
     return serveFile(res, abs);
@@ -217,11 +239,22 @@ async function handle(req, res) {
   }
   // Embedded files (images etc.), non-Markdown only
   if (p.startsWith('/files/') && m === 'GET') {
-    const rel = decodeURIComponent(p.slice('/files/'.length));
+    const rel = dec(p.slice('/files/'.length));
     if (/\.md$/i.test(rel)) throw httpErr(403, 'Forbidden');
     return serveFile(res, safePath(rel));
   }
-  // Export of the whole data folder as tar.gz comes later (see GUIDE.md)
+  // Backup: the whole data folder (pages + images, no session file) as a .tar.gz download
+  if (p === '/api/export' && m === 'GET') {
+    const entries = (await fsp.readdir(DATA_DIR)).filter(n => !n.startsWith('.'));
+    if (!entries.length) throw httpErr(404, 'Nothing to export yet');
+    const day = new Date().toISOString().slice(0, 10);
+    const tar = spawn('tar', ['czf', '-', '-C', DATA_DIR, ...entries], { stdio: ['ignore', 'pipe', 'inherit'] });
+    res.writeHead(200, { 'Content-Type': 'application/gzip', 'Content-Disposition': `attachment; filename="mdwiki-${day}.tar.gz"`, 'X-Content-Type-Options': 'nosniff' });
+    tar.stdout.pipe(res);
+    tar.on('error', e => { console.error('export failed:', e.message); res.destroy(); });
+    res.on('close', () => tar.kill());
+    return;
+  }
   return send(res, 404, { error: 'Not found' });
 }
 
@@ -233,3 +266,18 @@ http.createServer((req, res) => {
     else res.end();
   });
 }).listen(PORT, () => console.log(`mdwiki running on port ${PORT}, data: ${DATA_DIR}`));
+
+// Graceful shutdown: write pending sessions right away and exit at once.
+// (Node as PID 1 in Docker ignores SIGTERM without a handler, so "docker compose restart" would wait 10 s and then kill it.)
+function shutdown() {
+  clearTimeout(saveTimer);
+  try {
+    for (const [k, exp] of sessions) if (exp < Date.now()) sessions.delete(k);
+    const tmp = SESSION_FILE + '.tmp-' + process.pid;
+    fs.writeFileSync(tmp, JSON.stringify(Object.fromEntries(sessions)), { mode: 0o600 });
+    fs.renameSync(tmp, SESSION_FILE);
+  } catch (e) { console.error('Could not save sessions:', e.message); }
+  process.exit(0);
+}
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);

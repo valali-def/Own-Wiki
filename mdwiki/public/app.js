@@ -106,151 +106,38 @@ const setStatus = (t) => {
 };
 
 // ---- Markdown ----
-function url(u) {
-  return /^\s*(javascript|data|vbscript):/i.test(u) ? "#" : u;
+// Rendered with "marked" (public/vendor/marked.umd.js, served locally so it works offline).
+// Safety rules (do not remove): raw HTML in the text is ESCAPED, never rendered,
+// and link/image addresses must pass safeUrl() (no javascript:, data:, vbscript: ...).
+function safeUrl(u) {
+  u = String(u || "").trim();
+  // allowed: http(s), mailto, tel, absolute or relative paths, #anchors, and addresses without a scheme
+  return /^(https?:|mailto:|tel:|\/|#|\.{1,2}\/|[^:]*$)/i.test(u) ? u : "#";
 }
-function inline(t) {
-  const codes = [];
-  t = t.replace(/`([^`]+)`/g, (_, c) => {
-    codes.push(c);
-    return "\u0000" + (codes.length - 1) + "\u0000";
-  });
-  t = t.replace(
-    /!\[([^\]]*)\]\(([^)\s]+)\)/g,
-    (_, a, u) => `<img alt="${a}" src="${url(u)}">`,
-  );
-  t = t.replace(
-    /\[([^\]]+)\]\(([^)\s]+)\)/g,
-    (_, a, u) => `<a href="${url(u)}" target="_blank" rel="noopener">${a}</a>`,
-  );
-  t = t
-    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
-    .replace(/(^|[^*])\*([^*\s][^*]*)\*/g, "$1<em>$2</em>")
-    .replace(/~~([^~]+)~~/g, "<del>$1</del>");
-  return t.replace(/\u0000(\d+)\u0000/g, (_, i) => `<code>${codes[i]}</code>`);
-}
-const isTableSep = (l) =>
-  l !== undefined &&
-  /^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/.test(l) &&
-  l.includes("-");
-const cells = (r) =>
-  r
-    .trim()
-    .replace(/^\||\|$/g, "")
-    .split("|")
-    .map((c) => c.trim());
-const LIST = /^(\s*)([-*+]|\d+\.)\s+(.*)$/;
-function startsBlock(l, next) {
-  return (
-    /^(```|#{1,6}\s|&gt;|\s*([-*+]|\d+\.)\s|(-{3,}|\*{3,})\s*$)/.test(l) ||
-    (l.includes("|") && isTableSep(next))
-  );
-}
-function list(lines, i) {
-  const items = [];
-  while (i < lines.length && LIST.test(lines[i])) {
-    const m = lines[i].match(LIST);
-    items.push({ d: m[1].length, ord: /\d/.test(m[2]), t: m[3] });
-    i++;
-  }
-  let html = "",
-    stack = [];
-  const text = (t) =>
-    inline(t).replace(
-      /^\[( |x)\]\s/i,
-      (_, c) =>
-        `<input type="checkbox" disabled${c !== " " ? " checked" : ""}> `,
-    );
-  for (const it of items) {
-    while (stack.length && it.d < stack[stack.length - 1].d)
-      html += "</li></" + stack.pop().tag + ">";
-    const top = stack[stack.length - 1];
-    if (!top || it.d > top.d) {
-      const tag = it.ord ? "ol" : "ul";
-      stack.push({ d: it.d, tag });
-      html += `<${tag}><li>` + text(it.t);
-    } else html += "</li><li>" + text(it.t);
-  }
-  while (stack.length) html += "</li></" + stack.pop().tag + ">";
-  return [html, i];
-}
-function blocks(lines) {
-  const out = [];
-  let i = 0,
-    m;
-  while (i < lines.length) {
-    const l = lines[i];
-    if (!l.trim()) {
-      i++;
-      continue;
-    }
-    if (/^```/.test(l)) {
-      const buf = [];
-      i++;
-      while (i < lines.length && !/^```/.test(lines[i])) buf.push(lines[i++]);
-      i++;
-      out.push(`<pre><code>${buf.join("\n")}</code></pre>`);
-      continue;
-    }
-    if ((m = l.match(/^(#{1,6})\s+(.*)$/))) {
-      out.push(`<h${m[1].length}>${inline(m[2])}</h${m[1].length}>`);
-      i++;
-      continue;
-    }
-    if (/^(-{3,}|\*{3,})\s*$/.test(l)) {
-      out.push("<hr>");
-      i++;
-      continue;
-    }
-    if (/^&gt;/.test(l)) {
-      const buf = [];
-      while (i < lines.length && /^&gt;/.test(lines[i]))
-        buf.push(lines[i++].replace(/^&gt;\s?/, ""));
-      out.push(`<blockquote>${blocks(buf)}</blockquote>`);
-      continue;
-    }
-    if (LIST.test(l)) {
-      const [h, ni] = list(lines, i);
-      out.push(h);
-      i = ni;
-      continue;
-    }
-    if (l.includes("|") && isTableSep(lines[i + 1])) {
-      const head = cells(l);
-      i += 2;
-      const rows = [];
-      while (i < lines.length && lines[i].includes("|") && lines[i].trim())
-        rows.push(cells(lines[i++]));
-      out.push(
-        "<table><thead><tr>" +
-          head.map((c) => `<th>${inline(c)}</th>`).join("") +
-          "</tr></thead><tbody>" +
-          rows
-            .map(
-              (r) =>
-                "<tr>" +
-                r.map((c) => `<td>${inline(c)}</td>`).join("") +
-                "</tr>",
-            )
-            .join("") +
-          "</tbody></table>",
-      );
-      continue;
-    }
-    const buf = [l];
-    i++;
-    while (
-      i < lines.length &&
-      lines[i].trim() &&
-      !startsBlock(lines[i], lines[i + 1])
-    )
-      buf.push(lines[i++]);
-    out.push(`<p>${inline(buf.join(" "))}</p>`);
-  }
-  return out.join("\n");
-}
+const mdParser =
+  typeof marked !== "undefined"
+    ? new marked.Marked({
+        gfm: true,
+        renderer: {
+          html({ text, block }) {
+            return block ? `<p>${esc(text.trim())}</p>\n` : esc(text);
+          },
+          link({ href, title, tokens }) {
+            const t = title ? ` title="${esc(title)}"` : "";
+            return `<a href="${esc(safeUrl(href))}"${t} target="_blank" rel="noopener">${this.parser.parseInline(tokens)}</a>`;
+          },
+          image({ href, title, text }) {
+            const t = title ? ` title="${esc(title)}"` : "";
+            return `<img alt="${esc(text)}" src="${esc(safeUrl(href))}"${t}>`;
+          },
+        },
+      })
+    : null;
 function md(src) {
-  return blocks(esc(src.replace(/\r/g, "")).split("\n"));
+  src = String(src).replace(/\r/g, "");
+  // If the library failed to load, show the text as-is instead of breaking the page.
+  if (!mdParser) return `<pre>${esc(src)}</pre>`;
+  return mdParser.parse(src);
 }
 // ---- end Markdown ----
 

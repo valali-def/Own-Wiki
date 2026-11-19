@@ -34,6 +34,9 @@ More details in **GUIDE.md**.
 server.js            Backend (Node standard library only, no npm packages)
 public/index.html    User interface
 public/app.js        Frontend logic (login, tree, editor, search, own dialogs)
+public/vendor/       marked (Markdown renderer), served locally, no CDN
+test/smoke.js        Server tests (node test/smoke.js)
+test/render.js       Markdown renderer + XSS tests (node test/render.js)
 public/style.css     Appearance (square design, light/dark switchable)
 demo/build.js        Builds the single-file demo from the files in public/
 demo/mock-api.js     Fake backend used only by the demo (replaces server.js)
@@ -55,6 +58,6 @@ data/assets/         uploaded images
 | `DATA_DIR` | `./data` (`/data` in the image) | Folder containing the pages |
 | `COOKIE_SECURE` | false | Set to `true` as soon as HTTPS is in front (e.g. `tailscale serve`), otherwise login over HTTP won't work |
 
-Sessions are kept in memory: after a container restart you have to log in again.
+Sessions are stored (as hashes) in `data/.sessions.json`, so a container restart does not log you out.
 
 Continue with **GUIDE.md**.
