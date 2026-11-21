@@ -238,6 +238,7 @@ Rules:
 - **Shelf/Book/Chapter come from folder depth**, not from extra files or a database.
 - **Square design and own dialogs** (see "UI conventions"): no `border-radius`, no `prompt`/`confirm`/`alert`.
 - **Keep the demo in sync** with the frontend and the API.
+- **Mobile layout is read-only on purpose.** Editing is only meant for the desktop layout (on a phone, switch the browser to desktop view). Do not 'fix' this.
 
 ## API quick reference
 

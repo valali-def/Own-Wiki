@@ -27,7 +27,7 @@ export function createEditor(host, { value = "", onUpdate, onCommand } = {}) {
     { dark: document.documentElement.dataset.theme === "dark" },
   );
   const highlight = HighlightStyle.define([
-    { tag: t.heading, color: "var(--head)", fontWeight: "bold" },
+    { tag: t.heading, color: "var(--head-text)", fontWeight: "bold" },
     { tag: t.emphasis, fontStyle: "italic" },
     { tag: t.strong, fontWeight: "bold" },
     { tag: t.strikethrough, textDecoration: "line-through" },

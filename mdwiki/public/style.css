@@ -1,11 +1,11 @@
 :root {
   --bg:#f3f4f6; --panel:#fff; --fg:#1f2937; --muted:#6b7280; --line:#e2e5ea; --hover:#eef1f6;
-  --accent:#2563eb; --accent-fg:#fff; --head:#1d4ed8; --danger:#dc2626; --code:#eef1f6;
+  --accent:#2563eb; --accent-fg:#fff; --head:#1d4ed8; --head-text:#1d4ed8; --danger:#dc2626; --code:#eef1f6;
   --c-shelf:#0d9488; --c-book:#2563eb; --c-chapter:#c026d3; --c-page:#16a34a;
 }
 [data-theme="dark"] {
   --bg:#0f1218; --panel:#171b22; --fg:#e5e7eb; --muted:#9aa3b2; --line:#272d38; --hover:#1f2530;
-  --accent:#4c8dff; --accent-fg:#fff; --head:#142a5c; --danger:#f87171; --code:#1f2530;
+  --accent:#4c8dff; --accent-fg:#fff; --head:#142a5c; --head-text:#7db0ff; --danger:#f87171; --code:#1f2530;
   --c-shelf:#2dd4bf; --c-book:#60a5fa; --c-chapter:#e879f9; --c-page:#4ade80;
 }
 * { box-sizing: border-box; }
