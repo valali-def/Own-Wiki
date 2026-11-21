@@ -3,6 +3,74 @@
 This document is for anyone who continues building the project (including a new Claude session).
 Just upload this project and say: "Continue with Step 2 in GUIDE.md."
 
+## CURRENT STATE — updated 2026-11-21 (Step 2 is IN PROGRESS)
+
+Everything below the old sections is unchanged; this section is the up-to-date picture on top of it.
+
+### Where things live
+- `mdwiki/` is the real project (`server.js`, `public/`, `test/`, `Dockerfile`, `docker-compose.yml`).
+  The `GUIDE.md` and `README.md` in the repo root are plain duplicates of `mdwiki/GUIDE.md` / `mdwiki/README.md` — keep them in sync when editing.
+- `temp-files/` is scratch only (not part of the app): it currently holds a portable Node.js v22.14.0
+  (`temp-files/node/node-v22.14.0-win-x64/node.exe`, zip next to it) plus test logs. Node is NOT installed
+  on this Windows machine and not on PATH — run tests with that binary, e.g.
+  `& '...\temp-files\node\node-v22.14.0-win-x64\node.exe' mdwiki\test\render.js`
+- The `demo/` folder is still missing from this repository (see the open note in Step 1).
+
+### What was ADDED in the 2026-11-21 session (Step 2, part 1: CodeMirror 6 vendored + editor module)
+- **`mdwiki/tools/fetch-cm6.mjs`** (new): downloads CodeMirror 6 and all dependencies as ES modules from
+  jsDelivr (`+esm` bundles), rewrites every CDN import to a flat local file name, saves the licences, and
+  verifies the result (no external URLs left, every file passes `node --check`). Re-run with
+  `node tools/fetch-cm6.mjs` from `mdwiki/` if the editor libs should be refreshed.
+- **`mdwiki/public/vendor/cm6/`** (new): 21 vendored packages, ~460 KB total, fully offline.
+  Key files: `@codemirror__state.js`, `@codemirror__view.js`, `@codemirror__commands.js`,
+  `@codemirror__language.js`, `@codemirror__lang-markdown.js`, `@lezer__markdown.js`, `@lezer__highlight.js`,
+  plus small deps (`style-mod`, `crelt`, `w3c-keyname`, `@marijn__find-cluster-break`, …).
+  Note the flat naming (`@codemirror__view.js`, slash replaced by `__`) so `./name.js` imports resolve from
+  every file. `VERSIONS.txt` lists exact versions, `LICENSES/` the licences (all MIT/BSD-style).
+  Verified: the whole import graph loads in Node 22 (`import cm-editor.js` → exports `createEditor`).
+- **`mdwiki/public/cm-editor.js`** (new): the glue module. Exports
+  `createEditor(host, { value, onUpdate, onCommand })` → `{ view, getValue, setValue, focus, setDisabled }`.
+  Inside: Markdown language (`markdown({ base: markdownLanguage })`), a `HighlightStyle` that uses only the
+  CSS variables from `style.css` (so light/dark both work), `bracketMatching()`, `history()`,
+  `EditorView.lineWrapping`, `highlightActiveLine()`, an editable `Compartment`, and a keymap routing
+  **Mod-b / Mod-i / Mod-k / Mod-s** to `onCommand(name, view)` (return `true` = handled) plus `indentWithTab`.
+- **`mdwiki/public/index.html`** (changed): added `<div id="cmHost" hidden></div>` inside `#panes`,
+  directly before the existing `<textarea id="editor">` (the textarea stays as fallback).
+
+### Step 2 checklist — current state
+- DONE: CM6 vendored (`public/vendor/cm6/`), `tools/fetch-cm6.mjs`, `public/cm-editor.js`, `#cmHost` in `index.html`.
+- STILL TO DO (the actual wiring, not started yet):
+  1. `public/app.js`: lazy-load the editor via `import("./cm-editor.js").catch(() => null)`; keep the
+     `<textarea>` as fallback when CM6 fails to load (same resilience rule as `md()`). Add helpers
+     `editorValue()` / `setEditorValue()` / `setEditorDisabled()` / `editorFocus()` and use them in
+     `openEditor()`, `save()`, `setMode()` and the input handler (CM6 changes come through `onUpdate`).
+     Implement Ctrl+B / Ctrl+I / Ctrl+K twice: for CM6 via `onCommand` (wrap selection in `**…**`, `*…*`,
+     `[…](url)` with the cursor on `url`), and for the textarea fallback via a `keydown` listener.
+     Guard the global Ctrl+S listener with `if (e.defaultPrevented) return;` so a CM6-handled Mod-s
+     does not save twice. In `openEditor()` show `#cmHost` and hide `#editor` when CM6 is active (and vice versa).
+  2. `public/style.css`: layout/typography for `#cmHost` and CM6 classes (`.cm-editor` flex:1 + height 100%,
+     `.cm-scroller` overflow auto, mono font 14px/1.6 like the old textarea, `.cm-content` padding 18px,
+     `.cm-line` padding 0 18px, `.cm-cursor`, `.cm-selectionBackground` in `--hover`/`--line`, focused outline none).
+     The global `border-radius: 0 !important` rule already keeps CM6 square.
+  3. Add `mdwiki/test/cm6-vendor.js` (permanent test): assert no `cdn.jsdelivr.net`/`"/npm/` references remain
+     in `public/vendor/cm6/*.js` and that `public/cm-editor.js` imports successfully in Node
+     (`await import(...)` → `typeof createEditor === "function"`).
+  4. Re-run the test suite with the portable Node: `node test/render.js` (baseline before these changes:
+     37/37 passed), `node test/smoke.js`, `node test/cm6-vendor.js`. The `// ---- Markdown ----` markers in
+     `app.js` must stay — `test/render.js` extracts `md()` by slicing between them.
+  5. Then try it in a real browser against the server (editor open, split preview, Ctrl+B/I/K, Ctrl+S,
+     reload) and only then mark Step 2 as DONE below.
+- After Step 2: Steps 3–6 are untouched (see below). The missing `demo/` folder blocks the demo-related
+  bullets in Step 1 and Step 3 until it is recreated (`demo/build.js`, `demo/mock-api.js`, `demo/wiki-demo.html`).
+
+### Test/verification status right now
+- `node test/render.js` (Markdown renderer + XSS): **all passed** (37 checks) — run as baseline on 2026-11-21
+  before any frontend edits, using the portable Node in `temp-files/`.
+- `node test/smoke.js` (server API + security): not re-run yet in this session.
+- CM6 vendor graph: import + syntax verified in Node 22 (see above). Not yet exercised in a browser.
+- Still untested overall: see "What is NOT tested" below (dialogs, search, upload, mobile layout, theme switch,
+  Docker build).
+
 ## Goal
 
 Similar to BookStack, but: just me as the user, Markdown only (GitHub Flavored Markdown), no database,
@@ -123,7 +191,13 @@ Rules:
 - If you change `md()`: run `node test/render.js` and keep the "escape first" rule.
 - The demo build (`demo/build.js`) must now also include `public/vendor/marked.umd.js` before `app.js`. **The `demo/` folder was missing from the uploaded zip, so this is not done.**
 
-### Step 2: Better editor
+### Step 2: Better editor — STATUS 2026-11-21: IN PROGRESS
+- **Done so far:** CodeMirror 6 vendored offline in `public/vendor/cm6/` (via `tools/fetch-cm6.mjs`),
+  editor glue module `public/cm-editor.js`, `#cmHost` container added to `index.html`. Details in
+  "CURRENT STATE" at the top of this file.
+- **Still to do:** wire it into `app.js` (lazy `import()` + textarea fallback, editor helpers, Ctrl+B/I/K,
+  Ctrl+S de-dup), styles for `#cmHost`/`.cm-*` in `style.css`, new `test/cm6-vendor.js`, re-run all tests,
+  browser check. Then change this heading to DONE.
 - Replace the `<textarea>` with **CodeMirror 6** (Markdown syntax colors, indentation, brackets).
 - Keyboard shortcuts: Ctrl+B for bold, Ctrl+I for italic, Ctrl+K for link.
 
