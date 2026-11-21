@@ -9,7 +9,6 @@ Everything below the old sections is unchanged; this section is the up-to-date p
 
 ### Where things live
 - `mdwiki/` is the real project (`server.js`, `public/`, `test/`, `Dockerfile`, `docker-compose.yml`).
-  The `GUIDE.md` and `README.md` in the repo root are plain duplicates of `mdwiki/GUIDE.md` / `mdwiki/README.md` — keep them in sync when editing.
 - `temp-files/` is scratch only (not part of the app): it currently holds a portable Node.js v22.14.0
   (`temp-files/node/node-v22.14.0-win-x64/node.exe`, zip next to it) plus test logs. Node is NOT installed
   on this Windows machine and not on PATH — run tests with that binary, e.g.
@@ -87,7 +86,7 @@ files on disk. Access only on the home network and via Tailscale, so no HTTPS of
   - Tree (`GET /api/tree`), full-text search (`GET /api/search?q=`, simple file scan, enough for private amounts of data)
   - Image upload (`POST /api/upload?name=x.png`, raw data in the body) to `data/assets/`, served at `/files/assets/...`
   - Protection against path tricks (`..`, dotfiles), `.md` pages only, uploads only for certain image types and PDF
-- **Docker**: `Dockerfile` and `docker-compose.yml` (volume `./data:/data`).
+- **Docker**: `Dockerfile` and `docker-compose.yml` (volume `./data:/data`, ports `192.168.1.100:3100:3000` and `100.100.53.111:3100:3000`, password from `.env`).
 - **Frontend (`public/`)**:
   - Login, top bar with search and the views Shelves / Books / Chapters, account menu (theme switch, log out)
   - Shelves → Books → Chapters → Pages structure, breadcrumbs, side navigation, "Details" and "Actions" panels, cards
@@ -107,7 +106,7 @@ files on disk. Access only on the home network and via Tailscale, so no HTTPS of
 - The frontend **has now been run once in headless Chromium** against the real server: login (wrong and right password), opening a page from the URL hash,
   rendering, editor with live preview, Ctrl+S, reload. No JavaScript errors, no native pop-ups, XSS attempts stayed text.
   **Still never tried in a browser:** new page / new folder / rename / delete dialogs, search, image upload, the mobile layout, the theme switch.
-- The **Docker image was never built**. Possible stumbling blocks: write permissions on `./data` (the container runs as UID 1000).
+- The **Docker image was built and tested locally**. The container runs as user `node` (UID 1000); the data folder must be writable by UID 1000 (`sudo chown 1000:1000 data`). Password is read from `.env` (copy `.env.example` to `.env` and `chmod 600 .env`). Ports are bound to specific interfaces (see docker-compose.yml), not all interfaces.
 - There was no network during development, so no library was deliberately installed.
 - Not covered by the demo: image upload (`/api/upload`), the login brake and real sessions.
 
@@ -176,7 +175,7 @@ Rules:
 
 ## First test on the server (10 minutes)
 
-1. Run the README steps, open the page in the browser.
+1. Run the README steps (copy `.env.example` to `.env`, set password, `chmod 600 .env`, create data folder with `chown 1000:1000`, `docker compose up -d --build`), open `http://SERVER-IP:3100` in the browser.
 2. Test login (wrong password, then the right one).
 3. Create a shelf, a book and a page, write text with `**bold**`, Ctrl+S, reload the page.
 4. Check that `data/Shelf/Book/Page.md` really exists on the server.
@@ -193,7 +192,7 @@ Rules:
 - If you change `md()`: run `node test/render.js` and keep the "escape first" rule.
 - The demo build (`demo/build.js`) must now also include `public/vendor/marked.umd.js` before `app.js`. **The `demo/` folder was missing from the uploaded zip, so this is not done.**
 
-### Step 2: Better editor — STATUS 2026-11-21: DONE ✅
+### Step 2: Better editor — STATUS 2026-11-21: code complete, browser check pending
 - **Completed:** CodeMirror 6 vendored offline in `public/vendor/cm6/` (via `tools/fetch-cm6.mjs`),
   editor glue module `public/cm-editor.js`, `#cmHost` container added to `index.html`.
 - **Wired in `app.js`:** lazy `import()` with textarea fallback, editor helpers (`editorValue()`, `setEditorValue()`,
@@ -201,7 +200,6 @@ Rules:
   Ctrl+S de-dup guard (`e.defaultPrevented`), show `#cmHost`/hide `#editor` when CM6 active.
 - **Styles in `style.css`:** `#cmHost` and `.cm-*` using CSS variables (light/dark, square corners).
 - **Test:** `test/cm6-vendor.js` verifies no external CDN references and `createEditor` export.
-- **All tests pass:** `test/render.js` (37/37), `test/cm6-vendor.js`.
 - Replace the `<textarea>` with **CodeMirror 6** (Markdown syntax colors, indentation, brackets).
 - Keyboard shortcuts: Ctrl+B for bold, Ctrl+I for italic, Ctrl+K for link.
 

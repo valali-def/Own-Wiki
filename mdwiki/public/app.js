@@ -148,8 +148,8 @@ function useTextareaFallback() {
 // CM6 helper: wrap selection with prefix/suffix (like wrapSelection for textarea)
 function cmWrapSelection(view, prefix, suffix) {
   const { state } = view;
-  view.dispatch({
-    changes: state.changesByRange((range) => {
+  const transaction = state.update(
+    state.changeByRange((range) => {
       const from = range.from;
       const to = range.to;
       const selected = state.sliceDoc(from, to);
@@ -166,61 +166,39 @@ function cmWrapSelection(view, prefix, suffix) {
       }
       return { changes: [{ from, to, insert }], range: EditorSelection.range(newAnchor, newHead) };
     }),
-    selection: EditorSelection.ranges(
-      state.selection.ranges.map((range) => {
-        const from = range.from;
-        const to = range.to;
-        const selected = state.sliceDoc(from, to);
-        if (selected) {
-          return EditorSelection.range(from + prefix.length, from + prefix.length + selected.length);
-        } else {
-          return EditorSelection.cursor(from + prefix.length);
-        }
-      })
-    ),
-    scrollIntoView: true,
-  });
+    { scrollIntoView: true, userEvent: "input" }
+  );
+  view.dispatch(transaction);
   view.focus();
 }
 
 // CM6 helper: insert link markup [text](url) and select "url"
 function cmInsertLink(view) {
   const { state } = view;
-  view.dispatch({
-    changes: state.changesByRange((range) => {
+  const transaction = state.update(
+    state.changeByRange((range) => {
       const from = range.from;
       const to = range.to;
       const selected = state.sliceDoc(from, to);
       let insert, newAnchor, newHead;
       if (selected) {
         // Wrap selected text: [selected](url) and select "url"
-        insert = "[" + selected + "](" + ")";
-        // "url" starts after "[selected](" which is 2 + selected.length + 2 = selected.length + 4
-        newAnchor = from + 2 + selected.length + 2; // after "[selected]("
+        insert = "[" + selected + "](url)";
+        // "url" starts after "[selected](" which is 2 + selected.length + 1 = selected.length + 3
+        newAnchor = from + 2 + selected.length + 1; // after "[selected]("
         newHead = newAnchor + 3; // "url" is 3 chars
       } else {
         // Empty selection: [](url) and select "url"
-        insert = "[](" + ")";
-        // "url" starts after "[](" which is 3 chars
+        insert = "[](url)";
+        // "url" starts after "[]( " which is 3 chars
         newAnchor = from + 3;
         newHead = newAnchor + 3; // "url" is 3 chars
       }
       return { changes: [{ from, to, insert }], range: EditorSelection.range(newAnchor, newHead) };
     }),
-    selection: EditorSelection.ranges(
-      state.selection.ranges.map((range) => {
-        const from = range.from;
-        const to = range.to;
-        const selected = state.sliceDoc(from, to);
-        if (selected) {
-          return EditorSelection.range(from + 2 + selected.length + 2, from + 2 + selected.length + 2 + 3);
-        } else {
-          return EditorSelection.range(from + 3, from + 6);
-        }
-      })
-    ),
-    scrollIntoView: true,
-  });
+    { scrollIntoView: true, userEvent: "input" }
+  );
+  view.dispatch(transaction);
   view.focus();
 }
 
@@ -783,14 +761,14 @@ function insertLink() {
   let insert, newStart, newEnd;
   if (selected) {
     // Wrap selected text: [selected](url) and select "url"
-    insert = "[" + selected + "](" + ")";
-    // "url" starts after "[selected](" which is 2 + selected.length + 2
-    newStart = start + 2 + selected.length + 2;
+    insert = "[" + selected + "](url)";
+    // "url" starts after "[selected](" which is 2 + selected.length + 1 = selected.length + 3
+    newStart = start + 2 + selected.length + 1;
     newEnd = newStart + 3; // "url" is 3 chars
   } else {
     // Empty selection: [](url) and select "url"
-    insert = "[](" + ")";
-    // "url" starts after "[](" which is 3 chars
+    insert = "[](url)";
+    // "url" starts after "[]( " which is 3 chars
     newStart = start + 3;
     newEnd = newStart + 3; // "url" is 3 chars
   }

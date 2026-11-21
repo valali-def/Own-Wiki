@@ -8,10 +8,12 @@ Looks like a small book shelf: **Shelves → Books → Chapters → Pages**, wit
 
 ## Getting started
 
-1. In `docker-compose.yml`, change the password at `APP_PASSWORD`.
-2. `mkdir -p data && sudo chown 1000:1000 data` (the container runs as user `node`, UID 1000).
+1. Copy `.env.example` to `.env` and set a strong password:
+   `cp .env.example .env && chmod 600 .env`
+2. Create the data folder with correct ownership (container runs as user `node`, UID 1000):
+   `mkdir -p data && sudo chown 1000:1000 data`
 3. `docker compose up -d --build`
-4. Open `http://SERVER-IP:3000` in your browser and enter the password.
+4. Open `http://SERVER-IP:3100` in your browser and enter the password.
 
 Without Docker (for testing, Node 18+ required):
 `APP_PASSWORD=secret DATA_DIR=./data node server.js`

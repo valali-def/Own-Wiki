@@ -4,9 +4,10 @@ services:
     container_name: mdwiki
     restart: unless-stopped
     ports:
-      - "3000:3000"          # left = port on the server, change if needed
+      - "192.168.1.100:3100:3000"
+      - "100.100.53.111:3100:3000"
     environment:
-      APP_PASSWORD: "PUT-A-LONG-PASSWORD-HERE"
+      APP_PASSWORD: ${APP_PASSWORD:?set APP_PASSWORD in .env}
       # COOKIE_SECURE: "true"   # only enable if you use HTTPS (e.g. tailscale serve)
     volumes:
       - ./data:/data          # all pages live here as .md files
