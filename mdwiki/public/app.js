@@ -292,12 +292,14 @@ $("logout").onclick = async () => {
   showLogin();
 };
 $("downloadBackup").onclick = async () => {
+  const previousStatus = $("status").textContent;
   setStatus("Preparing backup...");
   try {
     const res = await fetch("/api/export", { credentials: "include" });
     if (!res.ok) {
-      const err = await res.text().catch(() => "Export failed");
-      await uiAlert(err);
+      const data = await res.json().catch(() => ({}));
+      const message = data.error || "Export failed (status " + res.status + ")";
+      await uiAlert(message);
       return;
     }
     const blob = await res.blob();
@@ -313,7 +315,10 @@ $("downloadBackup").onclick = async () => {
   } catch (e) {
     await uiAlert("Export failed: " + e.message);
   } finally {
-    setStatus("");
+    // Restore status only if it still says "Preparing backup..."
+    if ($("status").textContent === "Preparing backup...") {
+      setStatus(previousStatus);
+    }
     $("acctMenu").hidden = true;
   }
 };

@@ -63,4 +63,10 @@ Continue with **GUIDE.md**.
 
 Sessions are stored (as hashes) in `data/.sessions.json`, so a container restart does not log you out.
 
-Continue with **GUIDE.md**.
+## Backup
+
+- The account menu has "Download backup" (downloads `data/` as `.tar.gz`, without `.sessions.json`).
+- For automatic backups on the server use cron, for example this line (adjust the paths):
+  `0 3 * * * tar czf /path/to/backups/own-wiki-$(date +\%F).tar.gz --exclude=".sessions.json*" -C /path/to/mdwiki/data .`
+  Inside a crontab the `%` must be written as `\%`.
+- Old backups should be deleted regularly, for example with `find /path/to/backups -name "own-wiki-*.tar.gz" -mtime +14 -delete`.

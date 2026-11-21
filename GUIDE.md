@@ -1,9 +1,9 @@
 # GUIDE: Status and next steps
 
 This document is for anyone who continues building the project (including a new Claude session).
-Just upload this project and say: "Continue with Step 5 in GUIDE.md."
+Just upload this project and say: "Continue with Step 4 in GUIDE.md."
 
-## CURRENT STATE — updated 2026-11-21 (Step 5: code complete, browser check pending)
+## CURRENT STATE — updated 2026-11-21 (Step 5 done)
 
 Everything below the old sections is unchanged; this section is the up-to-date picture on top of it.
 
@@ -78,7 +78,7 @@ Everything below the old sections is unchanged; this section is the up-to-date p
 - `node test/smoke.js` (server API + security): **39 passed, 2 failed** (pre-existing session persistence issue on Windows only; srv.kill() is a hard kill without SIGTERM; session persistence confirmed in Docker test) — run 2026-11-21
 - CM6 vendor graph: import + syntax verified in Node 22. Exercised in browser on server.
 - All browser tests passed (dialogs, search, rename/move/delete, theme switch, editor, image upload). Mobile layout is read-only on purpose.
-- **Step 5 (this session):** "Download backup" button added to `#acctMenu`; all 4 tests still pass (same 39/2 smoke.js result). Browser test pending.
+- **Step 5 (this session):** "Download backup" button added to `#acctMenu`; all 4 tests still pass (same 39/2 smoke.js result). Browser test passed 2026-11-21.
 
 ## Goal
 
@@ -236,10 +236,10 @@ Rules:
 - Links between pages, e.g. `[[PageName]]`.
 - Already done: current page in the URL hash, dark/light toggle.
 
-### Step 5: Export and backup — STATUS 2026-11-21: code complete, browser check pending
-- **Completed:** "Download backup" button in the account menu (`#acctMenu`), fetches `GET /api/export`, shows `uiAlert` on error (e.g. 404 "Nothing to export yet"), downloads `.tar.gz` via temporary `<a download="mdwiki-YYYY-MM-DD.tar.gz">` with local date, closes menu, shows `setStatus("Preparing backup...")` during operation.
+### Step 5: Export and backup — STATUS 2026-11-21: DONE, browser tested 2026-11-21
+- **Completed:** "Download backup" button in the account menu (`#acctMenu`), fetches `GET /api/export`, shows `uiAlert` on error (e.g. 404 "Nothing to export yet"), downloads `.tar.gz` via temporary `<a download="mdwiki-YYYY-MM-DD.tar.gz">` with local date, closes menu, shows `setStatus("Preparing backup...")` during operation. The button downloads a `.tar.gz` with pages and assets and without `.sessions.json` (checked by the user).
 - Endpoint `GET /api/export` delivers the data folder as `.tar.gz` (using `tar czf - -C` in Alpine via `child_process`), covered by `test/smoke.js`.
-- Backup on the server simply via cron: `tar czf backup-$(date +%F).tar.gz data/`.
+- On the home server an automatic daily backup (03:00, kept 14 days) runs via cron; this script is NOT part of the repo.
 - Optional: keep `data/` as a Git repo for a version history.
 
 ### Step 6: Optional extras
