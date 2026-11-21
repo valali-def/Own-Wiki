@@ -50,8 +50,6 @@ data/assets/         uploaded images
 
 The mobile layout is read-only on purpose; edit on the desktop layout.
 
-Continue with **GUIDE.md**.
-
 ## Configuration (environment variables)
 
 | Variable | Default | Meaning |
@@ -70,3 +68,5 @@ Sessions are stored (as hashes) in `data/.sessions.json`, so a container restart
   `0 3 * * * tar czf /path/to/backups/own-wiki-$(date +\%F).tar.gz --exclude=".sessions.json*" -C /path/to/mdwiki/data .`
   Inside a crontab the `%` must be written as `\%`.
 - Old backups should be deleted regularly, for example with `find /path/to/backups -name "own-wiki-*.tar.gz" -mtime +14 -delete`.
+
+Continue with **GUIDE.md**.

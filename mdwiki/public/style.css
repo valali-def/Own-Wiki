@@ -74,6 +74,24 @@ aside { overflow: auto; padding: 14px 12px; }
 .node.t-shelf svg { color: var(--c-shelf); } .node.t-book svg { color: var(--c-book); }
 .node.t-chapter svg { color: var(--c-chapter); } .node.t-page svg { color: var(--c-page); }
 .children { margin-left: 12px; padding-left: 6px; border-left: 1px solid var(--line); }
+.children.collapsed { display: none; }
+.node .toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--fg);
+  cursor: pointer;
+  flex: none;
+}
+.node .toggle:hover:not(:disabled) { background: var(--hover); }
+.node .toggle svg { width: 14px; height: 14px; }
+.node .toggle[aria-label="Collapse"] svg { transform: rotate(90deg); }
+.node .toggle-placeholder { display: inline-block; width: 22px; flex: none; }
 .hit { color: var(--muted); font-size: 12px; white-space: normal; }
 
 /* content */
@@ -94,6 +112,10 @@ aside { overflow: auto; padding: 14px 12px; }
 .seg { display: flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
 .seg button { border: 0; border-radius: 0; background: transparent; padding: 5px 10px; }
 .seg button.on { background: var(--accent); color: var(--accent-fg); }
+.seg-btn { border: 1px solid var(--line); background: transparent; padding: 5px 10px; cursor: pointer; }
+.seg-btn:hover:not(:disabled) { background: var(--hover); }
+.seg-btn.on { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+.seg-btn:disabled { opacity: 0.45; cursor: default; }
 #panes { flex: 1; display: flex; min-height: 0; }
 #editor { flex: 1; border: 0; border-radius: 0; outline: 0; resize: none; padding: 18px; background: var(--panel); color: var(--fg);
   font: 14px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; tab-size: 2; min-width: 0; }

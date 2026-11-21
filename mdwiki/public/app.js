@@ -77,6 +77,19 @@ const store = {
       localStorage.setItem(k, v);
     } catch (e) {}
   },
+  getJson: (k, def) => {
+    try {
+      const v = localStorage.getItem(k);
+      return v ? JSON.parse(v) : def;
+    } catch (e) {
+      return def;
+    }
+  },
+  setJson: (k, v) => {
+    try {
+      localStorage.setItem(k, JSON.stringify(v));
+    } catch (e) {}
+  },
 };
 
 // ---- CodeMirror 6 editor (lazy-loaded) ----
@@ -208,6 +221,12 @@ let sel = "",
   pageContent = "",
   editing = false,
   dirty = false;
+let collapsedFolders = store.getJson("collapsedFolders", []);
+
+// Autosave state
+let autosaveEnabled = store.getJson("autosaveEnabled", false);
+let autosaveTimer = null;
+let autosaveSaving = false;
 
 async function api(method, url, body) {
   const opt = { method, headers: {} };
@@ -380,6 +399,7 @@ async function leaveEditor() {
   if (dirty && !await uiConfirm("Discard unsaved changes?")) return false;
   editing = false;
   dirty = false;
+  cancelAutosave();
   // Clean up CM6 editor if active
   if (cmEditor) {
     cmEditor.view.destroy();
@@ -505,17 +525,63 @@ function renderCrumbs(label) {
   if (label) parts.push(`<a>${esc(label)}</a>`);
   $("crumbs").innerHTML = parts.join('<span class="sep">›</span>');
 }
-const nodeHtml = (n) =>
-  `<div class="node t-${n.kind}${n.path === sel ? " active" : ""}" data-p="${esc(n.path)}">${ico(n.kind)}<span>${esc(n.name)}</span></div>` +
-  (n.type === "folder" && n.children.length
-    ? `<div class="children">${n.children.map(nodeHtml).join("")}</div>`
-    : "");
+
+function isCollapsed(path) {
+  return collapsedFolders.includes(path);
+}
+
+function toggleCollapsed(path) {
+  if (isCollapsed(path)) {
+    collapsedFolders = collapsedFolders.filter((p) => p !== path);
+  } else {
+    collapsedFolders.push(path);
+  }
+  store.setJson("collapsedFolders", collapsedFolders);
+  renderNav();
+}
+
+function ensurePathExpanded(path) {
+  const n = index.get(path);
+  if (!n || n.type !== "folder") return;
+  let changed = false;
+  while (n && n.parent) {
+    if (isCollapsed(n.parent)) {
+      collapsedFolders = collapsedFolders.filter((p) => p !== n.parent);
+      changed = true;
+    }
+    const pn = index.get(n.parent);
+    if (!pn) break;
+    n = pn;
+  }
+  if (changed) {
+    store.setJson("collapsedFolders", collapsedFolders);
+  }
+}
+
+const nodeHtml = (n) => {
+  const active = n.path === sel ? " active" : "";
+  const hasChildren = n.type === "folder" && n.children.length > 0;
+  const collapsed = hasChildren && isCollapsed(n.path);
+  const toggleBtn = hasChildren
+    ? `<button class="toggle" data-toggle="${esc(n.path)}" aria-label="${collapsed ? "Expand" : "Collapse"}"><svg><use href="#i-chevron"/></svg></button>`
+    : `<span class="toggle-placeholder"></span>`;
+  const childrenHtml = hasChildren
+    ? `<div class="children${collapsed ? " collapsed" : ""}">${n.children.map(nodeHtml).join("")}</div>`
+    : "";
+  return (
+    `<div class="node t-${n.kind}${active}" data-p="${esc(n.path)}">${toggleBtn}${ico(n.kind)}<span>${esc(n.name)}</span></div>` +
+    childrenHtml
+  );
+};
+
 function renderNav() {
   const ch = chain(sel);
   const root =
     ch.find((x) => x.type === "folder" && x.depth === 2) ||
     ch.find((x) => x.type === "folder" && x.depth === 1) ||
     null;
+  // Ensure the path to the current page is expanded
+  if (sel) ensurePathExpanded(sel);
   document.querySelector("#navSide .side-title").textContent = root
     ? root.name
     : "Shelves";
@@ -558,6 +624,15 @@ function renderActions() {
 }
 for (const id of ["view", "crumbs", "tree"])
   $(id).addEventListener("click", (e) => {
+    // Handle toggle button clicks (expand/collapse folders)
+    const toggleBtn = e.target.closest("[data-toggle]");
+    if (toggleBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      toggleCollapsed(toggleBtn.dataset.toggle);
+      return;
+    }
+    // Handle navigation clicks
     const c = e.target.closest("[data-p]");
     if (c) go(c.dataset.p);
   });
@@ -674,6 +749,7 @@ async function openEditor() {
   const cmActive = await initCmEditor(pageContent, (val) => {
     dirty = true;
     setStatus("Unsaved");
+    scheduleAutosave();
     // pageContent must only change in save(), otherwise "Discard unsaved changes"
     // still shows the unsaved text. Keep dirty/status/preview updates only.
     if (!$("preview").hidden) {
@@ -705,6 +781,8 @@ async function openEditor() {
   }
 
   setMode(store.get("editMode") === "split" ? "split" : "md");
+  updateAutosaveButton();
+  if (autosaveEnabled) scheduleAutosave();
   renderActions();
   editorFocus();
 }
@@ -715,13 +793,69 @@ $("closeEdit").onclick = async () => {
     renderActions();
   }
 };
-async function save() {
+$("autosaveToggle").onclick = () => toggleAutosave();
+async function save(opts = {}) {
   if (!editing) return;
-  await api("PUT", "/api/page", { path: sel, content: editorValue() });
-  pageContent = editorValue();
-  dirty = false;
-  setStatus("Saved " + new Date().toLocaleTimeString());
-  renderDetails();
+  const isAutosave = opts.autosave === true;
+  if (isAutosave) {
+    if (autosaveSaving || !dirty) return;
+    autosaveSaving = true;
+    setStatus("Saving...");
+  }
+  try {
+    await api("PUT", "/api/page", { path: sel, content: editorValue() });
+    pageContent = editorValue();
+    dirty = false;
+    if (isAutosave) {
+      setStatus("Saved " + new Date().toLocaleTimeString());
+    } else {
+      setStatus("Saved " + new Date().toLocaleTimeString());
+    }
+    renderDetails();
+  } catch (e) {
+    if (isAutosave) {
+      setStatus("Autosave failed");
+      // page stays dirty, no retry loop
+    } else {
+      throw e;
+    }
+  } finally {
+    if (isAutosave) {
+      autosaveSaving = false;
+    }
+  }
+}
+
+// Autosave timer management
+function scheduleAutosave() {
+  if (!autosaveEnabled || !editing || !dirty || autosaveSaving) return;
+  clearTimeout(autosaveTimer);
+  autosaveTimer = setTimeout(() => {
+    save({ autosave: true }).catch(() => {}); // errors handled in save()
+  }, 3000);
+}
+
+function cancelAutosave() {
+  clearTimeout(autosaveTimer);
+  autosaveTimer = null;
+}
+
+function updateAutosaveButton() {
+  const btn = $("autosaveToggle");
+  if (!btn) return;
+  btn.textContent = autosaveEnabled ? "Autosave: on" : "Autosave: off";
+  btn.classList.toggle("on", autosaveEnabled);
+}
+
+async function toggleAutosave() {
+  autosaveEnabled = !autosaveEnabled;
+  store.setJson("autosaveEnabled", autosaveEnabled);
+  updateAutosaveButton();
+  if (autosaveEnabled) {
+    scheduleAutosave();
+  } else {
+    cancelAutosave();
+  }
 }
 $("save").onclick = () => save().catch((x) => uiAlert(x.message));
 
@@ -730,6 +864,7 @@ let raf = 0;
 $("editor").addEventListener("input", () => {
   dirty = true;
   setStatus("Unsaved");
+  scheduleAutosave();
   if (!$("preview").hidden && !raf)
     raf = requestAnimationFrame(() => {
       raf = 0;
