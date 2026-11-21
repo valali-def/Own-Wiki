@@ -3,7 +3,7 @@
 This document is for anyone who continues building the project (including a new Claude session).
 Just upload this project and say: "Continue with Step 2 in GUIDE.md."
 
-## CURRENT STATE — updated 2026-11-21 (Step 2: code complete, browser check still pending)
+## CURRENT STATE — updated 2026-11-21 (Step 3: code complete, browser check pending)
 
 Everything below the old sections is unchanged; this section is the up-to-date picture on top of it.
 
@@ -15,7 +15,7 @@ Everything below the old sections is unchanged; this section is the up-to-date p
   `& '...\temp-files\node\node-v22.14.0-win-x64\node.exe' mdwiki\test\render.js`
 - The `demo/` folder is still missing from this repository (see the open note in Step 1).
 
-### What was ADDED in the 2026-11-21 session (Step 2: CodeMirror 6 editor, complete)
+### What was ADDED in the 2026-11-21 session (Step 2: CodeMirror 6 editor; Step 3: Image upload)
 - **`mdwiki/tools/fetch-cm6.mjs`** (new): downloads CodeMirror 6 and all dependencies as ES modules from
   jsDelivr (`+esm` bundles), rewrites every CDN import to a flat local file name, saves the licences, and
   verifies the result (no external URLs left, every file passes `node --check`). Re-run with
@@ -35,13 +35,20 @@ Everything below the old sections is unchanged; this section is the up-to-date p
   **Mod-b / Mod-i / Mod-k / Mod-s** to `onCommand(name, view)` (return `true` = handled) plus `indentWithTab`.
 - **`mdwiki/public/index.html`** (changed): added `<div id="cmHost" hidden></div>` inside `#panes`,
   directly before the existing `<textarea id="editor">` (the textarea stays as fallback).
-- **`mdwiki/public/app.js`** (changed): wired the CM6 editor:
+- **`mdwiki/public/app.js`** (changed): wired the CM6 editor + image upload:
   - Lazy-loads via `import("./cm-editor.js").catch(() => null)`; keeps `<textarea>` as fallback.
   - Helpers `editorValue()`, `setEditorValue()`, `setEditorDisabled()`, `editorFocus()` used in
     `openEditor()`, `save()`, `setMode()`, input handler (live preview via `onUpdate`).
   - Ctrl+B / Ctrl+I / Ctrl+K for CM6 via `onCommand` (bold/italic/link wrap), and for textarea via keydown.
   - Global Ctrl+S guarded with `if (e.defaultPrevented) return;` to avoid double-save.
   - Shows `#cmHost` / hides `#editor` when CM6 active, reverse when fallback.
+  - **Step 3:** `uploadFiles(files)` — validates allowed types (png, jpg, jpeg, gif, webp, svg, pdf),
+    generates names for pasted screenshots (`pasted-YYYYMMDD-HHMMSS.png`), POSTs to `/api/upload`,
+    shows "Uploading..." status, handles errors via `uiAlert`, returns markdown lines.
+  - **Step 3:** `insertMarkdownAtCursor(markdown)` — inserts at cursor in both CM6 (`view.dispatch`)
+    and textarea (selectionStart + `input` event), marks dirty, updates preview.
+  - **Step 3:** `paste` / `drop` / `dragover` handlers on `#cmHost` and `#editor`, registered once via
+    `registerEditorFileEvents()` in `showApp()`; survive CM6 destroy/create cycles.
 - **`mdwiki/public/style.css`** (changed): styles for `#cmHost` and `.cm-*` using only CSS variables (light/dark, square corners).
 - **`mdwiki/test/cm6-vendor.js`** (new): verifies no external CDN references in vendor imports,
   and that `cm-editor.js` exports `createEditor` function in Node.
@@ -58,7 +65,7 @@ Everything below the old sections is unchanged; this section is the up-to-date p
   - bold/italic with selected text: wraps it and keeps inner text selected
   - empty selection: inserts prefix+suffix and puts cursor between them
   - link: inserts `[selected](url)` and selects "url" (empty: `[](url)` with "url" selected)
-  - CM6 uses `state.changesByRange` for correct multi-range handling
+  - CM6 uses `state.changeByRange` for correct multi-range handling
 - PARTIAL: All tests pass (`test/render.js` 37/37, `test/cm6-vendor.js`, `test/app-lint.js`); `test/smoke.js` has pre-existing session persistence failures unrelated to these changes.
 - After Step 2: Steps 3–6 are untouched (see below). The missing `demo/` folder blocks the demo-related
   bullets in Step 1 and Step 3 until it is recreated (`demo/build.js`, `demo/mock-api.js`, `demo/wiki-demo.html`).
@@ -67,9 +74,9 @@ Everything below the old sections is unchanged; this section is the up-to-date p
 - `node test/render.js` (Markdown renderer + XSS): **all passed** (37 checks) — run 2026-11-21
 - `node test/cm6-vendor.js` (CM6 vendor imports): **all passed** — run 2026-11-21
 - `node test/app-lint.js` (app.js lint for `$("#...")`): **all passed** — run 2026-11-21
-- `node test/smoke.js` (server API + security): **39 passed, 2 failed** (pre-existing session persistence issue, unrelated to Step 2 changes) — run 2026-11-21
+- `node test/smoke.js` (server API + security): **39 passed, 2 failed** (pre-existing session persistence issue, unrelated to Step 2/3 changes) — run 2026-11-21
 - CM6 vendor graph: import + syntax verified in Node 22. Not yet exercised in a browser.
-- Still untested overall: see "What is NOT tested" below (dialogs, search, upload, mobile layout, theme switch,
+- Still untested overall: see "What is NOT tested" below (dialogs, search, upload browser test, mobile layout, theme switch,
   Docker build).
 
 ## Goal
@@ -105,7 +112,7 @@ files on disk. Access only on the home network and via Tailscale, so no HTTPS of
 
 - The frontend **has now been run once in headless Chromium** against the real server: login (wrong and right password), opening a page from the URL hash,
   rendering, editor with live preview, Ctrl+S, reload. No JavaScript errors, no native pop-ups, XSS attempts stayed text.
-  **Still never tried in a browser:** new page / new folder / rename / delete dialogs, search, image upload, the mobile layout, the theme switch.
+  **Still never tried in a browser:** new page / new folder / rename / delete dialogs, search, image upload (paste/drag-drop), the mobile layout, the theme switch.
 - The **Docker image was built and tested locally**. The container runs as user `node` (UID 1000); the data folder must be writable by UID 1000 (`sudo chown 1000:1000 data`). Password is read from `.env` (copy `.env.example` to `.env` and `chmod 600 .env`). Ports are bound to specific interfaces (see docker-compose.yml), not all interfaces.
 - There was no network during development, so no library was deliberately installed.
 - Not covered by the demo: image upload (`/api/upload`), the login brake and real sessions.
@@ -203,11 +210,21 @@ Rules:
 - Replace the `<textarea>` with **CodeMirror 6** (Markdown syntax colors, indentation, brackets).
 - Keyboard shortcuts: Ctrl+B for bold, Ctrl+I for italic, Ctrl+K for link.
 
-### Step 3: Images via drag-and-drop and paste
-- The backend is done (`/api/upload`). In the frontend, catch `paste` and `drop` events in the editor,
-  send the file with `fetch('/api/upload?name=' + name, { method: 'POST', body: file })`,
-  and insert the returned `markdown` line at the cursor position.
-- Add `/api/upload` to `demo/mock-api.js` (for example by returning a data URL) so it can be tried in the demo.
+### Step 3: Images via drag-and-drop and paste — STATUS 2026-11-21: code complete, browser check pending
+- **Completed in `app.js`:** `uploadFiles(files)` validates allowed types (png, jpg, jpeg, gif, webp, svg, pdf),
+  generates names for pasted screenshots (`pasted-YYYYMMDD-HHMMSS.png`), POSTs to `/api/upload`,
+  shows "Uploading..." status, handles errors via `uiAlert`, returns markdown lines.
+- **Insert at cursor:** `insertMarkdownAtCursor(markdown)` works for both CM6 (`view.dispatch` with
+  `changes` + selection update) and textarea fallback (insert at `selectionStart`, dispatch `input` event).
+  Marks page dirty and updates live preview like normal typing.
+- **Events:** `paste` / `drop` / `dragover` on `#cmHost` and `#editor`. Only act when files are present;
+  normal text paste/drop passes through. `preventDefault()` only for file events. Listeners registered
+  ONCE via `registerEditorFileEvents()` in `showApp()`; survive CM6 destroy/create cycles.
+- **Demo:** `/api/upload` not yet added to `demo/mock-api.js` (demo folder missing from repo).
+- **Tests:** `test/app-lint.js` OK, `test/render.js` 37/37 OK, `test/cm6-vendor.js` OK,
+  `test/smoke.js` 39 passed / 2 failed (pre-existing session persistence issue, unrelated).
+- Browser check pending: paste image, drag-and-drop image/PDF, verify markdown inserted at cursor in both
+  CM6 and textarea modes, verify preview updates, verify unsaved indicator.
 
 ### Step 4: Convenience
 - Make folders in the tree collapsible/expandable (the side navigation currently always shows the whole current book).

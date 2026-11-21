@@ -273,6 +273,7 @@ function showLogin() {
 function showApp() {
   $("login").hidden = true;
   $("app").hidden = false;
+  registerEditorFileEvents();
   init();
 }
 $("loginForm").addEventListener("submit", async (e) => {
@@ -729,6 +730,137 @@ document.addEventListener("keydown", (e) => {
     save().catch((x) => uiAlert(x.message));
   }
 });
+
+// ---- Image upload (paste / drag-and-drop) ----
+
+// Allowed file extensions (must match server.js)
+const ALLOWED_EXTS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.pdf']);
+
+// Generate a filename for pasted screenshots (name is "image.png" or empty)
+function generatePasteName(ext) {
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const dd = String(now.getDate()).padStart(2, '0');
+  const hh = String(now.getHours()).padStart(2, '0');
+  const mi = String(now.getMinutes()).padStart(2, '0');
+  const ss = String(now.getSeconds()).padStart(2, '0');
+  return `pasted-${yyyy}${mm}${dd}-${hh}${mi}${ss}${ext}`;
+}
+
+// Upload a list of File objects; returns an array of markdown lines (one per successful upload)
+async function uploadFiles(files) {
+  const markdownLines = [];
+  const previousStatus = $('status').textContent;
+
+  for (const file of files) {
+    const ext = (file.name && file.name.includes('.')) ? file.name.slice(file.name.lastIndexOf('.')).toLowerCase() : '';
+    if (!ALLOWED_EXTS.has(ext)) {
+      await uiAlert(`File type "${ext || 'unknown'}" not allowed. Allowed: png, jpg, jpeg, gif, webp, svg, pdf`);
+      continue;
+    }
+
+    // Determine the name to send to the server
+    let name = file.name;
+    if (!name || name === 'image.png' || name === 'blob') {
+      name = generatePasteName(ext || '.png');
+    }
+
+    setStatus('Uploading...');
+    try {
+      const res = await fetch('/api/upload?name=' + encodeURIComponent(name), {
+        method: 'POST',
+        body: file,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Upload failed with status ' + res.status);
+      if (data.markdown) markdownLines.push(data.markdown);
+    } catch (err) {
+      await uiAlert(err.message);
+    }
+  }
+
+  // Restore status (if no other operation has changed it in the meantime)
+  if ($('status').textContent === 'Uploading...') {
+    setStatus(previousStatus || (dirty ? 'Unsaved' : ''));
+  }
+
+  return markdownLines;
+}
+
+// Insert markdown at the current cursor position in the active editor (CM6 or textarea)
+// Marks the page as dirty and updates the live preview.
+function insertMarkdownAtCursor(markdown) {
+  if (cmEditor) {
+    const { view } = cmEditor;
+    const { state } = view;
+    const head = state.selection.main.head;
+    view.dispatch({
+      changes: { from: head, to: head, insert: markdown + '\n' },
+      selection: { anchor: head + markdown.length + 1, head: head + markdown.length + 1 },
+      scrollIntoView: true,
+      userEvent: 'input',
+    });
+    view.focus();
+    // onUpdate callback in initCmEditor will mark dirty and update preview
+  } else {
+    const ta = $('editor');
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    const text = ta.value;
+    ta.value = text.slice(0, start) + markdown + '\n' + text.slice(end);
+    const newPos = start + markdown.length + 1;
+    ta.selectionStart = ta.selectionEnd = newPos;
+    ta.focus();
+    // Trigger input event for live preview and dirty tracking
+    ta.dispatchEvent(new Event('input'));
+  }
+}
+
+// Handle paste event on the editor area
+async function handleEditorPaste(e) {
+  const files = e.clipboardData?.files;
+  if (!files || !files.length) return; // normal text paste, let it through
+  e.preventDefault();
+  const lines = await uploadFiles(Array.from(files));
+  for (const line of lines) insertMarkdownAtCursor(line);
+}
+
+// Handle drop event on the editor area
+async function handleEditorDrop(e) {
+  const files = e.dataTransfer?.files;
+  if (!files || !files.length) return; // normal drop, let it through
+  e.preventDefault();
+  const lines = await uploadFiles(Array.from(files));
+  for (const line of lines) insertMarkdownAtCursor(line);
+}
+
+// Handle dragover to allow dropping files
+function handleEditorDragOver(e) {
+  if (e.dataTransfer?.types?.includes('Files')) {
+    e.preventDefault();
+  }
+}
+
+// Register paste/drop/dragover listeners ONCE on the editor containers
+// These work for both CM6 (on #cmHost) and textarea fallback (on #editor)
+function registerEditorFileEvents() {
+  if (window.__editorFileEventsRegistered) return;
+  window.__editorFileEventsRegistered = true;
+
+  // #cmHost exists from the start (hidden), #editor exists from the start
+  const cmHost = $('cmHost');
+  const editor = $('editor');
+
+  // Use capture phase to catch events before CM6 might handle them
+  cmHost.addEventListener('paste', handleEditorPaste, true);
+  cmHost.addEventListener('drop', handleEditorDrop, true);
+  cmHost.addEventListener('dragover', handleEditorDragOver, true);
+
+  editor.addEventListener('paste', handleEditorPaste, true);
+  editor.addEventListener('drop', handleEditorDrop, true);
+  editor.addEventListener('dragover', handleEditorDragOver, true);
+}
 
 // Helper: wrap selected text in textarea with prefix/suffix
 function wrapSelection(prefix, suffix) {
