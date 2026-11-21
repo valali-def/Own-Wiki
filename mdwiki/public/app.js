@@ -79,6 +79,82 @@ const store = {
   },
 };
 
+// ---- CodeMirror 6 editor (lazy-loaded) ----
+let cmModule = null;
+let cmEditor = null; // { view, getValue, setValue, focus, setDisabled }
+
+// Lazy-load CM6 editor module; falls back to null if anything fails
+async function loadCmEditor() {
+  if (cmModule !== null) return cmModule; // already loaded or failed
+  try {
+    cmModule = await import("./cm-editor.js").catch(() => null);
+  } catch (e) {
+    cmModule = null;
+  }
+  return cmModule;
+}
+
+// Editor helper functions that work with both CM6 and textarea fallback
+function editorValue() {
+  return cmEditor ? cmEditor.getValue() : $("#editor").value;
+}
+
+function setEditorValue(v) {
+  if (cmEditor) cmEditor.setValue(v);
+  else $("#editor").value = v;
+}
+
+function setEditorDisabled(d) {
+  if (cmEditor) cmEditor.setDisabled(d);
+  else $("#editor").disabled = d;
+}
+
+function editorFocus() {
+  if (cmEditor) cmEditor.focus();
+  else $("#editor").focus();
+}
+
+// Initialize CM6 editor inside #cmHost; returns true if CM6 is active
+async function initCmEditor(initialValue, onUpdate, onCommand) {
+  const mod = await loadCmEditor();
+  if (!mod || typeof mod.createEditor !== "function") return false;
+
+  const host = $("#cmHost");
+  host.hidden = false;
+  $("#editor").hidden = true;
+
+  cmEditor = mod.createEditor(host, {
+    value: initialValue,
+    onUpdate,
+    onCommand,
+  });
+  return true;
+}
+
+// Switch to textarea fallback (hide CM6, show textarea)
+function useTextareaFallback() {
+  if (cmEditor) {
+    cmEditor.view.destroy();
+    cmEditor = null;
+  }
+  $("#cmHost").hidden = true;
+  $("#editor").hidden = false;
+}
+
+// CM6 helper: wrap selection with prefix/suffix (like wrapSelection for textarea)
+function cmWrapSelection(view, prefix, suffix) {
+  const { state } = view;
+  const { selection } = state;
+  const changes = selection.ranges.map((range) => {
+    const from = range.from;
+    const to = range.to;
+    const selected = state.sliceDoc(from, to);
+    return { from, to, insert: prefix + selected + suffix };
+  });
+  view.dispatch({ changes, selection: { anchor: changes[0].from, head: changes[0].from + prefix.length + (changes[0].to - changes[0].from - prefix.length - suffix.length) } });
+  view.focus();
+}
+
 let tree = [],
   index = new Map();
 let sel = "",
@@ -225,6 +301,14 @@ async function leaveEditor() {
   if (dirty && !await uiConfirm("Discard unsaved changes?")) return false;
   editing = false;
   dirty = false;
+  // Clean up CM6 editor if active
+  if (cmEditor) {
+    cmEditor.view.destroy();
+    cmEditor = null;
+  }
+  // Ensure textarea is visible for next edit
+  $("#cmHost").hidden = true;
+  $("#editor").hidden = false;
   $("editorWrap").hidden = true;
   $("view").hidden = false;
   return true;
@@ -489,25 +573,60 @@ function setMode(m) {
   for (const b of document.querySelectorAll("#modeSwitch button"))
     b.classList.toggle("on", b.dataset.mode === m);
   $("preview").hidden = m !== "split";
-  if (m === "split") $("preview").innerHTML = md($("editor").value);
+  if (m === "split") $("preview").innerHTML = md(editorValue());
 }
 for (const b of document.querySelectorAll("#modeSwitch button"))
   b.onclick = () => setMode(b.dataset.mode);
-function openEditor() {
+
+async function openEditor() {
   const n = index.get(sel);
   if (!n || n.type !== "page") return;
   editing = true;
   dirty = false;
   $("view").hidden = true;
   $("editorWrap").hidden = false;
-  $("editor").disabled = false;
-  $("editor").value = pageContent;
+  setEditorDisabled(false);
+  setEditorValue(pageContent);
   $("save").disabled = false;
   $("current").textContent = n.path;
   setStatus("");
+
+  // Try to initialize CM6 editor
+  const cmActive = await initCmEditor(pageContent, (val) => {
+    dirty = true;
+    setStatus("Unsaved");
+    pageContent = val;
+    if (!$("preview").hidden) {
+      $("preview").innerHTML = md(val);
+    }
+  }, (name, view) => {
+    if (name === "save") {
+      save().catch((x) => uiAlert(x.message));
+      return true;
+    }
+    // Handle Ctrl+B (bold), Ctrl+I (italic), Ctrl+K (link) for CM6
+    if (name === "bold") {
+      cmWrapSelection(view, "**", "**");
+      return true;
+    }
+    if (name === "italic") {
+      cmWrapSelection(view, "*", "*");
+      return true;
+    }
+    if (name === "link") {
+      cmWrapSelection(view, "[", "](" + ")");
+      return true;
+    }
+    return false;
+  });
+
+  if (!cmActive) {
+    useTextareaFallback();
+  }
+
   setMode(store.get("editMode") === "split" ? "split" : "md");
   renderActions();
-  $("editor").focus();
+  editorFocus();
 }
 $("edit").onclick = openEditor;
 $("closeEdit").onclick = async () => {
@@ -518,13 +637,15 @@ $("closeEdit").onclick = async () => {
 };
 async function save() {
   if (!editing) return;
-  await api("PUT", "/api/page", { path: sel, content: $("editor").value });
-  pageContent = $("editor").value;
+  await api("PUT", "/api/page", { path: sel, content: editorValue() });
+  pageContent = editorValue();
   dirty = false;
   setStatus("Saved " + new Date().toLocaleTimeString());
   renderDetails();
 }
 $("save").onclick = () => save().catch((x) => uiAlert(x.message));
+
+// Textarea fallback: live preview + keyboard shortcuts (Ctrl+B/I/K)
 let raf = 0;
 $("editor").addEventListener("input", () => {
   dirty = true;
@@ -532,15 +653,50 @@ $("editor").addEventListener("input", () => {
   if (!$("preview").hidden && !raf)
     raf = requestAnimationFrame(() => {
       raf = 0;
-      $("preview").innerHTML = md($("editor").value);
+      $("preview").innerHTML = md(editorValue());
     });
 });
+
+// Textarea fallback: Ctrl+B (bold), Ctrl+I (italic), Ctrl+K (link)
+$("editor").addEventListener("keydown", (e) => {
+  if ((e.ctrlKey || e.metaKey) && !e.altKey) {
+    if (e.key === "b") {
+      e.preventDefault();
+      wrapSelection("**", "**");
+    } else if (e.key === "i") {
+      e.preventDefault();
+      wrapSelection("*", "*");
+    } else if (e.key === "k") {
+      e.preventDefault();
+      wrapSelection("[", "](" + ")");
+    }
+  }
+});
+
+// Global Ctrl+S: guard with defaultPrevented so CM6's Mod-s doesn't save twice
 document.addEventListener("keydown", (e) => {
+  if (e.defaultPrevented) return;
   if ((e.ctrlKey || e.metaKey) && e.key === "s" && editing) {
     e.preventDefault();
     save().catch((x) => uiAlert(x.message));
   }
 });
+
+// Helper: wrap selected text in textarea with prefix/suffix
+function wrapSelection(prefix, suffix) {
+  const ta = $("#editor");
+  const start = ta.selectionStart;
+  const end = ta.selectionEnd;
+  const text = ta.value;
+  const selected = text.slice(start, end);
+  ta.value = text.slice(0, start) + prefix + selected + suffix + text.slice(end);
+  // Restore selection to cover the inserted text
+  ta.selectionStart = start;
+  ta.selectionEnd = start + prefix.length + selected.length + suffix.length;
+  ta.focus();
+  // Trigger input event for live preview
+  ta.dispatchEvent(new Event("input"));
+}
 window.addEventListener("beforeunload", (e) => {
   if (dirty) {
     e.preventDefault();

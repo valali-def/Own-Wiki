@@ -34,9 +34,11 @@ More details in **GUIDE.md**.
 server.js            Backend (Node standard library only, no npm packages)
 public/index.html    User interface
 public/app.js        Frontend logic (login, tree, editor, search, own dialogs)
-public/vendor/       marked (Markdown renderer), served locally, no CDN
+public/cm-editor.js  CodeMirror 6 editor glue module (lazy-loaded)
+public/vendor/       marked + CodeMirror 6 (vendored, offline, no CDN)
 test/smoke.js        Server tests (node test/smoke.js)
 test/render.js       Markdown renderer + XSS tests (node test/render.js)
+test/cm6-vendor.js   CM6 vendor integrity test (node test/cm6-vendor.js)
 public/style.css     Appearance (square design, light/dark switchable)
 demo/build.js        Builds the single-file demo from the files in public/
 demo/mock-api.js     Fake backend used only by the demo (replaces server.js)

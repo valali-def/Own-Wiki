@@ -21,7 +21,9 @@ async function api(method, url, body, raw) {
 }
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 function startServer() {
-  const p = spawn('node', [path.join(__dirname, '..', 'server.js')], { env: { ...process.env, PORT, DATA_DIR: DATA, APP_PASSWORD: PW }, stdio: ['ignore', 'pipe', 'inherit'] });
+  // Use process.execPath to get the current Node executable (works when Node is not on PATH)
+  const nodeExe = process.execPath;
+  const p = spawn(nodeExe, [path.join(__dirname, '..', 'server.js')], { env: { ...process.env, PORT, DATA_DIR: DATA, APP_PASSWORD: PW }, stdio: ['ignore', 'pipe', 'inherit'] });
   return new Promise(res => p.stdout.on('data', d => String(d).includes('running') && res(p)));
 }
 (async () => {

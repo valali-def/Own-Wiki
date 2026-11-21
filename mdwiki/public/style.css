@@ -99,6 +99,17 @@ aside { overflow: auto; padding: 14px 12px; }
   font: 14px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; tab-size: 2; min-width: 0; }
 #preview { flex: 1; overflow: auto; padding: 18px 24px; border-left: 1px solid var(--line); min-width: 0; }
 
+/* CodeMirror 6 editor host */
+#cmHost { flex: 1; display: flex; flex-direction: column; min-height: 0; background: var(--panel); color: var(--fg); border: 0; }
+#cmHost .cm-editor { flex: 1; display: flex; flex-direction: column; height: 100%; }
+#cmHost .cm-content { flex: 1; padding: 18px; font: 14px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; tab-size: 2; outline: none; }
+#cmHost .cm-gutters { border-right: 1px solid var(--line); background: var(--panel); color: var(--muted); padding: 0 8px; }
+#cmHost .cm-activeLine { background: var(--hover); }
+#cmHost .cm-selectionMatch { background: var(--hover); }
+#cmHost .cm-cursor { border-left-color: var(--fg); }
+#cmHost .cm-focused .cm-selectionBackground { background: var(--accent); opacity: 0.2; }
+#cmHost.cm-focused { outline: none; }
+
 /* rendered markdown */
 .md-body { line-height: 1.7; overflow-wrap: anywhere; }
 .md-body h1, .md-body h2, .md-body h3 { line-height: 1.25; margin: 1.4em 0 .5em; }
