@@ -8,6 +8,8 @@ Looks like a small book shelf: **Shelves → Books → Chapters → Pages**, wit
 
 ## Getting started
 
+**All commands run inside the `mdwiki/` folder (`cd mdwiki`).**
+
 1. Copy `.env.example` to `.env` and set a strong password:
    `cp .env.example .env && chmod 600 .env`
 2. Create the data folder with correct ownership (container runs as user `node`, UID 1000):
@@ -15,20 +17,10 @@ Looks like a small book shelf: **Shelves → Books → Chapters → Pages**, wit
 3. `docker compose up -d --build`
 4. Open `http://SERVER-IP:3100` in your browser and enter the password.
 
+> **Note:** The two IPs in `docker-compose.yml` ports are the author's server IPs and must be changed to your own server IPs (or use `3100:3000` only for local tests).
+
 Without Docker (for testing, Node 18+ required):
 `APP_PASSWORD=secret DATA_DIR=./data node server.js`
-
-## Try the design without a server (demo)
-
-Open **`demo/wiki-demo.html`** by double-clicking it. No server, no Node, no Docker needed.
-
-- It is the real interface (same `index.html`, `style.css`, `app.js`), but talks to a small fake backend in memory.
-- **Any password works** (only an empty field is rejected, so you can see the error message).
-- It comes with sample shelves, books, chapters and pages. Everything you change is gone after a reload.
-- After you change `public/style.css`, `public/index.html` or `public/app.js`, rebuild it:
-  `node demo/build.js`
-
-More details in **GUIDE.md**.
 
 ## Structure
 
@@ -41,17 +33,24 @@ public/vendor/       marked + CodeMirror 6 (vendored, offline, no CDN)
 test/smoke.js        Server tests (node test/smoke.js)
 test/render.js       Markdown renderer + XSS tests (node test/render.js)
 test/cm6-vendor.js   CM6 vendor integrity test (node test/cm6-vendor.js)
+test/app-lint.js     app.js lint for `$("#...")` bug (node test/app-lint.js)
+tools/fetch-cm6.mjs  Downloads and verifies CM6 vendor packages (node tools/fetch-cm6.mjs)
 public/style.css     Appearance (square design, light/dark switchable)
-demo/build.js        Builds the single-file demo from the files in public/
-demo/mock-api.js     Fake backend used only by the demo (replaces server.js)
-demo/wiki-demo.html  Ready-made demo, open it directly in the browser
 Dockerfile
 docker-compose.yml
 data/                your pages (created on startup, mounted as a volume)
 data/assets/         uploaded images
 ```
 
-`demo/` is only for development. It is not needed in the Docker image.
+## Update
+
+`git pull`, then `docker compose up -d --build` in `mdwiki/`. A plain `docker compose restart` is NOT enough because `public/` is baked into the image.
+
+## Mobile layout
+
+The mobile layout is read-only on purpose; edit on the desktop layout.
+
+Continue with **GUIDE.md**.
 
 ## Configuration (environment variables)
 

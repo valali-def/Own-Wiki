@@ -291,6 +291,32 @@ $("logout").onclick = async () => {
   await api("POST", "/api/logout", {}).catch(() => {});
   showLogin();
 };
+$("downloadBackup").onclick = async () => {
+  setStatus("Preparing backup...");
+  try {
+    const res = await fetch("/api/export", { credentials: "include" });
+    if (!res.ok) {
+      const err = await res.text().catch(() => "Export failed");
+      await uiAlert(err);
+      return;
+    }
+    const blob = await res.blob();
+    const day = new Date().toISOString().slice(0, 10);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `mdwiki-${day}.tar.gz`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    await uiAlert("Export failed: " + e.message);
+  } finally {
+    setStatus("");
+    $("acctMenu").hidden = true;
+  }
+};
 $("acctBtn").onclick = (e) => {
   e.stopPropagation();
   $("acctMenu").hidden = !$("acctMenu").hidden;

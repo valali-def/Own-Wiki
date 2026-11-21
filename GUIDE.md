@@ -1,9 +1,9 @@
 # GUIDE: Status and next steps
 
 This document is for anyone who continues building the project (including a new Claude session).
-Just upload this project and say: "Continue with Step 2 in GUIDE.md."
+Just upload this project and say: "Continue with Step 5 in GUIDE.md."
 
-## CURRENT STATE — updated 2026-11-21 (Step 3: code complete, browser tests passed)
+## CURRENT STATE — updated 2026-11-21 (Step 5: code complete, browser check pending)
 
 Everything below the old sections is unchanged; this section is the up-to-date picture on top of it.
 
@@ -15,7 +15,7 @@ Everything below the old sections is unchanged; this section is the up-to-date p
   `& '...\temp-files\node\node-v22.14.0-win-x64\node.exe' mdwiki\test\render.js`
 - The `demo/` folder is still missing from this repository (see the open note in Step 1).
 
-### What was ADDED in the 2026-11-21 session (Step 2: CodeMirror 6 editor; Step 3: Image upload)
+### What was ADDED in the 2026-11-21 session (Step 2: CodeMirror 6 editor; Step 3: Image upload; Step 5: Download backup button)
 - **`mdwiki/tools/fetch-cm6.mjs`** (new): downloads CodeMirror 6 and all dependencies as ES modules from
   jsDelivr (`+esm` bundles), rewrites every CDN import to a flat local file name, saves the licences, and
   verifies the result (no external URLs left, every file passes `node --check`). Re-run with
@@ -35,6 +35,7 @@ Everything below the old sections is unchanged; this section is the up-to-date p
   **Mod-b / Mod-i / Mod-k / Mod-s** to `onCommand(name, view)` (return `true` = handled) plus `indentWithTab`.
 - **`mdwiki/public/index.html`** (changed): added `<div id="cmHost" hidden></div>` inside `#panes`,
   directly before the existing `<textarea id="editor">` (the textarea stays as fallback).
+  **Step 5:** added "Download backup" button in `#acctMenu`.
 - **`mdwiki/public/app.js`** (changed): wired the CM6 editor + image upload:
   - Lazy-loads via `import("./cm-editor.js").catch(() => null)`; keeps `<textarea>` as fallback.
   - Helpers `editorValue()`, `setEditorValue()`, `setEditorDisabled()`, `editorFocus()` used in
@@ -67,7 +68,7 @@ Everything below the old sections is unchanged; this section is the up-to-date p
   - link: inserts `[selected](url)` and selects "url" (empty: `[](url)` with "url" selected)
   - CM6 uses `state.changeByRange` for correct multi-range handling
 - DONE: All tests pass (`test/render.js` 37/37, `test/cm6-vendor.js`, `test/app-lint.js`); `test/smoke.js` has 2 pre-existing session persistence failures on Windows only (srv.kill() is a hard kill without SIGTERM); session persistence confirmed in Docker test.
-- After Step 2: Steps 3–6 are untouched (see below). The missing `demo/` folder blocks the demo-related
+- Steps 4–6 are untouched (see below). The missing `demo/` folder blocks the demo-related
   bullets in Step 1 and Step 3 until it is recreated (`demo/build.js`, `demo/mock-api.js`, `demo/wiki-demo.html`).
 
 ### Test/verification status right now
@@ -77,6 +78,7 @@ Everything below the old sections is unchanged; this section is the up-to-date p
 - `node test/smoke.js` (server API + security): **39 passed, 2 failed** (pre-existing session persistence issue on Windows only; srv.kill() is a hard kill without SIGTERM; session persistence confirmed in Docker test) — run 2026-11-21
 - CM6 vendor graph: import + syntax verified in Node 22. Exercised in browser on server.
 - All browser tests passed (dialogs, search, rename/move/delete, theme switch, editor, image upload). Mobile layout is read-only on purpose.
+- **Step 5 (this session):** "Download backup" button added to `#acctMenu`; all 4 tests still pass (same 39/2 smoke.js result). Browser test pending.
 
 ## Goal
 
@@ -111,7 +113,9 @@ files on disk. Access only on the home network and via Tailscale, so no HTTPS of
 
 - The frontend **has now been run once in headless Chromium** against the real server: login (wrong and right password), opening a page from the URL hash,
   rendering, editor with live preview, Ctrl+S, reload. No JavaScript errors, no native pop-ups, XSS attempts stayed text.
-  Browser tests done on the server (2026-11-21) and passed: new page / new folder / rename / move / delete dialogs, search, image upload (paste and drag-and-drop), theme switch, editor (CM6 + textarea). The mobile layout is read-only on purpose (not tested).
+- **Step 2 browser test (2026-11-21):** CM6 editor loads, syntax highlighting works in light and dark, live preview, Ctrl+S, Markdown functions.
+  **NOT confirmed in a browser yet:** Ctrl+B/I/K and the textarea fallback.
+- **Step 3 browser test (2026-11-21):** confirmed = pasting a screenshot and dragging a PNG into the CM6 editor, markdown line inserted at the cursor, preview, save and reload, normal text paste still works, a .txt drop shows the "not allowed" popup, files appear in data/assets. **NOT tested:** PDF, SVG, the textarea fallback.
 - The **Docker image was built and tested on the home server (2026-11-21): login, create shelf/book/page, editor, restart keeps sessions and data, image paste and drag-and-drop.** The container runs as user `node` (UID 1000); the data folder must be writable by UID 1000 (`sudo chown 1000:1000 data`). Password is read from `.env` (copy `.env.example` to `.env` and `chmod 600 .env`). Ports are bound to specific interfaces (see docker-compose.yml), not all interfaces.
 - There was no network during development, so no library was deliberately installed.
 - Not covered by the demo: image upload (`/api/upload`), the login brake and real sessions.
@@ -223,7 +227,7 @@ Rules:
 - **Demo:** `/api/upload` not yet added to `demo/mock-api.js` (demo folder missing from repo).
 - **Tests:** `test/app-lint.js` OK, `test/render.js` 37/37 OK, `test/cm6-vendor.js` OK,
   `test/smoke.js` 39 passed / 2 failed (pre-existing session persistence issue on Windows only; srv.kill() is a hard kill without SIGTERM; session persistence confirmed in Docker test).
-- **Browser test (2026-11-21):** paste image, drag-and-drop image/PDF, markdown inserted at cursor in both CM6 and textarea modes, preview updates, unsaved indicator works.
+- **Browser test (2026-11-21):** pasting a screenshot and dragging a PNG into the CM6 editor, markdown line inserted at the cursor, preview, save and reload, normal text paste still works, a .txt drop shows the "not allowed" popup, files appear in data/assets. NOT tested: PDF, SVG, the textarea fallback.
 
 ### Step 4: Convenience
 - Make folders in the tree collapsible/expandable (the side navigation currently always shows the whole current book).
@@ -232,9 +236,9 @@ Rules:
 - Links between pages, e.g. `[[PageName]]`.
 - Already done: current page in the URL hash, dark/light toggle.
 
-### Step 5: Export and backup (export endpoint already DONE: `GET /api/export` returns a .tar.gz, covered by `test/smoke.js`; there is no button for it in the UI yet)
-- Endpoint `GET /api/export` that delivers the data folder as `.tar.gz` or `.zip` (without a library, using the `tar` command
-  in the Alpine image via `child_process`).
+### Step 5: Export and backup — STATUS 2026-11-21: code complete, browser check pending
+- **Completed:** "Download backup" button in the account menu (`#acctMenu`), fetches `GET /api/export`, shows `uiAlert` on error (e.g. 404 "Nothing to export yet"), downloads `.tar.gz` via temporary `<a download="mdwiki-YYYY-MM-DD.tar.gz">` with local date, closes menu, shows `setStatus("Preparing backup...")` during operation.
+- Endpoint `GET /api/export` delivers the data folder as `.tar.gz` (using `tar czf - -C` in Alpine via `child_process`), covered by `test/smoke.js`.
 - Backup on the server simply via cron: `tar czf backup-$(date +%F).tar.gz data/`.
 - Optional: keep `data/` as a Git repo for a version history.
 
@@ -254,7 +258,7 @@ Rules:
 - **Shelf/Book/Chapter come from folder depth**, not from extra files or a database.
 - **Square design and own dialogs** (see "UI conventions"): no `border-radius`, no `prompt`/`confirm`/`alert`.
 - **Keep the demo in sync** with the frontend and the API.
-- **Mobile layout is read-only on purpose.** Editing is only meant for the desktop layout (on a phone, switch the browser to desktop view). Do not 'fix' this.
+- **Mobile layout is read-only on purpose (checked by the user).** Editing is only meant for the desktop layout (on a phone, switch the browser to desktop view). Do not 'fix' this.
 
 ## API quick reference
 
