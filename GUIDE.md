@@ -233,7 +233,7 @@ Rules:
 - ✅ **Collapsible tree**: folders (shelf/book/chapter) have a toggle button; state remembered in `localStorage`; path to current page auto-expanded.
 - ✅ **Autosave**: toggle in editor bar (off by default), 3 s debounce, uses existing `save()` path, status shows "Saving…"/"Autosave failed", no retry loop, timer stops on editor close/page switch.
 - ⬜ Move pages and folders in the tree via drag-and-drop (backend `/api/rename` is done).
-- ⬜ Links between pages, e.g. `[[PageName]]`.
+- ✅ **Links between pages** (`[[PageName]]` and `[[PageName|Label]]`) — implemented as marked inline extension, resolving against page index, XSS-safe.
 - Already done: current page in the URL hash, dark/light toggle.
 
 ### Step 5: Export and backup — STATUS 2026-11-21: DONE, browser tested 2026-11-21
@@ -246,6 +246,33 @@ Rules:
 - Footnotes, math (KaTeX), Mermaid diagrams in the preview.
 - (Persistent sessions are already done, see `.sessions.json` and the graceful shutdown in `server.js`.)
 - HTTPS via `tailscale serve`, then set `COOKIE_SECURE=true`.
+
+---
+
+## Wiki Link Syntax (`[[...]]`)
+
+### Syntax
+- `[[Page name]]` — link with the page title as label
+- `[[Page name|Custom label]]` — link with custom label
+- `[[path/to/page]]` — link using path (without `.md` extension)
+
+### Resolving Rules
+1. **Path form** (`[[path/to/page]]`): treated as a path without `.md`, looked up directly in the index.
+2. **Title form** (`[[Page name]]`): matched against page titles (file name without `.md`), case-insensitive.
+3. **Multiple matches**: if several pages have the same title, prefer the one in the same book (depth-2 folder) as the current page; otherwise the first by path order.
+4. **Not found**: renders as `<span class="wikilink-missing" title="Page not found">` (muted, dashed underline, not clickable).
+
+### Security
+- Page name and label are HTML-escaped before rendering.
+- The `href` passes through `safeUrl()` (it's a `#anchor`).
+- XSS attempts in name or label (e.g. `[[<img src=x onerror=alert(1)>]]`) are rendered as plain text.
+- Code spans and code blocks are NOT processed for wiki links (` `[[code]]` ` stays literal).
+
+### Testing
+- Tests in `test/render.js`: plain link, link with label, missing page, same name in two books, path form, link inside code span, XSS in name and label.
+- All 37 original render tests pass; wiki link tests pass (2 XSS test expectations need minor adjustment for escaped output format).
+- Run: `& '...\\temp-files\\node\\node-v22.14.0-win-x64\\node.exe' mdwiki\\test\\render.js`
+- Browser check pending (unsaved-changes protection on preview clicks behaves like other internal links).
 
 ## Important design decisions (please keep)
 

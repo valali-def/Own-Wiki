@@ -256,10 +256,117 @@ function safeUrl(u) {
   // allowed: http(s), mailto, tel, absolute or relative paths, #anchors, and addresses without a scheme
   return /^(https?:|mailto:|tel:|\/|#|\.{1,2}\/|[^:]*$)/i.test(u) ? u : "#";
 }
+
+// Wiki link resolver - injectable for testing (test/render.js sets a stub)
+// name: the page name or path from [[name]] or [[name|label]]
+// label: the label part (or name if no label)
+// currentPagePath: the path of the page being rendered (e.g. "Technik/Homelab/Docker.md")
+// Returns: { found: boolean, path: string|null, label: string }
+//   - found: true if page exists
+//   - path: the hash path (e.g. "#Technik/Homelab/Docker.md") if found
+//   - label: the label to display (escaped by caller)
+function resolveWikiLink(name, label, currentPagePath) {
+  // If name contains "/", treat as path without .md
+  if (name.includes("/")) {
+    const path = name.endsWith(".md") ? name : name + ".md";
+    const node = index.get(path);
+    if (node && node.type === "page") {
+      return { found: true, path: "#" + encodeURIComponent(path), label: label };
+    }
+    return { found: false, path: null, label: label };
+  }
+  // Match by title (file name without .md), case-insensitive
+  const lowerName = name.toLowerCase();
+  let candidates = [];
+  for (const node of index.values()) {
+    if (node.type === "page") {
+      const title = node.name; // file name without .md
+      if (title.toLowerCase() === lowerName) {
+        candidates.push(node);
+      }
+    }
+  }
+  if (candidates.length === 0) {
+    return { found: false, path: null, label: label };
+  }
+  // Prefer page in same book as current page
+  if (currentPagePath) {
+    const currentNode = index.get(currentPagePath);
+    if (currentNode) {
+      // Find the book (depth 2 folder) for current page
+      let currentBook = null;
+      let n = currentNode;
+      while (n && n.parent) {
+        const parent = index.get(n.parent);
+        if (parent && parent.depth === 2 && parent.type === "folder") {
+          currentBook = parent.path;
+          break;
+        }
+        n = parent;
+      }
+      if (currentBook) {
+        for (const cand of candidates) {
+          // Check if candidate is in the same book
+          let candBook = null;
+          let m = cand;
+          while (m && m.parent) {
+            const parent = index.get(m.parent);
+            if (parent && parent.depth === 2 && parent.type === "folder") {
+              candBook = parent.path;
+              break;
+            }
+            m = parent;
+          }
+          if (candBook === currentBook) {
+            return { found: true, path: "#" + encodeURIComponent(cand.path), label: label };
+          }
+        }
+      }
+    }
+  }
+  // Otherwise first by path
+  candidates.sort((a, b) => a.path.localeCompare(b.path));
+  return { found: true, path: "#" + encodeURIComponent(candidates[0].path), label: label };
+}
+
+// Make resolver globally accessible for the marked extension
+globalThis.resolveWikiLink = resolveWikiLink;
+
+// Wiki link marked inline extension
+const wikiLinkExt = {
+  name: "wikilink",
+  level: "inline",
+  start: (src) => src.indexOf("[["),
+  tokenizer: (src, tokens) => {
+    const match = src.match(/^\[\[([^\]]+)\]\]/);
+    if (match) {
+      const content = match[1];
+      const parts = content.split("|");
+      const name = parts[0];
+      const label = parts[1] || name;
+      return { type: "wikilink", raw: match[0], name: name, label: label };
+    }
+  },
+  renderer: (token) => {
+    // currentPagePath is the page being rendered (sel), or empty string
+    const resolved = globalThis.resolveWikiLink(token.name, token.label, sel || "");
+    const safeName = esc(token.name);
+    const safeLabel = esc(token.label);
+    if (resolved.found) {
+      // href is already a #anchor, pass through safeUrl for consistency
+      const safeHref = esc(safeUrl(resolved.path));
+      return `<a href="${safeHref}">${safeLabel}</a>`;
+    } else {
+      return `<span class="wikilink-missing" title="Page not found">${safeLabel}</span>`;
+    }
+  },
+};
+
 const mdParser =
   typeof marked !== "undefined"
     ? new marked.Marked({
         gfm: true,
+        extensions: [wikiLinkExt],
         renderer: {
           html({ text, block }) {
             return block ? `<p>${esc(text.trim())}</p>\n` : esc(text);

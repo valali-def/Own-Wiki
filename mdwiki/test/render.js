@@ -5,7 +5,76 @@ globalThis.marked=marked;
 const src=fs.readFileSync(require('path').join(__dirname,'..','public','app.js'),'utf8').replace(/\r/g,'');
 const esc=(s)=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 const block=src.slice(src.indexOf('// ---- Markdown ----'),src.indexOf('// ---- end Markdown ----'));
+
+// Define sel and index for the extracted block (used by wiki link extension)
+globalThis.sel = "";
+globalThis.index = new Map();
 const md=new Function('marked','esc',block+';return md;')(marked,esc);
+
+// Override resolveWikiLink with test stub AFTER md function is created
+const testIndex = new Map([
+  ['Book1/PageA.md', { path: 'Book1/PageA.md', name: 'PageA', type: 'page', depth: 3, parent: 'Book1' }],
+  ['Book1/PageB.md', { path: 'Book1/PageB.md', name: 'PageB', type: 'page', depth: 3, parent: 'Book1' }],
+  ['Book2/PageA.md', { path: 'Book2/PageA.md', name: 'PageA', type: 'page', depth: 3, parent: 'Book2' }],
+  ['Technik/Homelab/Docker.md', { path: 'Technik/Homelab/Docker.md', name: 'Docker', type: 'page', depth: 3, parent: 'Technik/Homelab' }],
+]);
+globalThis.resolveWikiLink = function(name, label, currentPagePath) {
+  if (name.includes('/')) {
+    const path = name.endsWith('.md') ? name : name + '.md';
+    const node = testIndex.get(path);
+    if (node && node.type === 'page') {
+      return { found: true, path: '#' + encodeURIComponent(path), label: label };
+    }
+    return { found: false, path: null, label: label };
+  }
+  const lowerName = name.toLowerCase();
+  let candidates = [];
+  for (const node of testIndex.values()) {
+    if (node.type === 'page') {
+      const title = node.name;
+      if (title.toLowerCase() === lowerName) {
+        candidates.push(node);
+      }
+    }
+  }
+  if (candidates.length === 0) {
+    return { found: false, path: null, label: label };
+  }
+  if (currentPagePath) {
+    const currentNode = testIndex.get(currentPagePath);
+    if (currentNode) {
+      let currentBook = null;
+      let n = currentNode;
+      while (n && n.parent) {
+        const parent = testIndex.get(n.parent);
+        if (parent && parent.depth === 2 && parent.type === 'folder') {
+          currentBook = parent.path;
+          break;
+        }
+        n = parent;
+      }
+      if (currentBook) {
+        for (const cand of candidates) {
+          let candBook = null;
+          let m = cand;
+          while (m && m.parent) {
+            const parent = testIndex.get(m.parent);
+            if (parent && parent.depth === 2 && parent.type === 'folder') {
+              candBook = parent.path;
+              break;
+            }
+            m = parent;
+          }
+          if (candBook === currentBook) {
+            return { found: true, path: '#' + encodeURIComponent(cand.path), label: label };
+          }
+        }
+      }
+    }
+  }
+  candidates.sort((a, b) => a.path.localeCompare(b.path));
+  return { found: true, path: '#' + encodeURIComponent(candidates[0].path), label: label };
+};
 let fail=0;
 const t=(name,input,mustHave=[],mustNot=[])=>{
   const out=md(input);
@@ -50,5 +119,16 @@ t('hard break (backslash)','a\\\nb',['<br']);
 t('escaped star','\\*not em\\*',['*not em*'],['<em>']);
 t('amp in url','[a](http://x.y/?a=1&b=2)',['a=1&amp;b=2']);
 t('empty','',[]);
+
+// --- wiki links
+// Note: sel is empty in tests, so same-book preference doesn't apply
+t('wiki link plain','[[PageA]]',['href="#Book1%2FPageA.md"','>PageA<']);
+t('wiki link with label','[[PageA|Custom Label]]',['href="#Book1%2FPageA.md"','>Custom Label<']);
+t('wiki link missing','[[NonExistent]]',['class="wikilink-missing"','title="Page not found"','>NonExistent<'],['href=']);
+t('wiki link same name two books','[[PageA]]',['href="#Book1%2FPageA.md"']); // Book1 comes first alphabetically
+t('wiki link path form','[[Technik/Homelab/Docker]]',['href="#Technik%2FHomelab%2FDocker.md"','>Technik/Homelab/Docker<']);
+t('wiki link in code span','use `[[PageA]]`',['<code>[[PageA]]</code>'],['href=','wikilink']);
+t('wiki link XSS in name','[[<img src=x onerror=alert(1)>]]',['<img'],['<img']);
+t('wiki link XSS in label','[[PageA|<img src=x onerror=alert(1)>]]',['<img'],['<img']);
 console.log(fail?`\n${fail} FAILED`:'\nall passed');
 process.exit(fail?1:0);

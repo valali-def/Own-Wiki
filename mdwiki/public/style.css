@@ -144,6 +144,14 @@ aside { overflow: auto; padding: 14px 12px; }
 .md-body table { border-collapse: collapse; } .md-body th, .md-body td { border: 1px solid var(--line); padding: 5px 10px; }
 .md-body hr { border: 0; border-top: 1px solid var(--line); }
 
+/* Wiki links */
+.md-body .wikilink-missing {
+  color: var(--muted);
+  text-decoration: underline dashed var(--muted);
+  cursor: default;
+  pointer-events: none;
+}
+
 @media (max-width: 1050px) { #layout { grid-template-columns: 240px minmax(0,1fr); } #actSide { display: none; } }
 @media (max-width: 760px) {
   #layout { grid-template-columns: 1fr; } #navSide { display: none; }
