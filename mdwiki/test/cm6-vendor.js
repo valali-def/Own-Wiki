@@ -9,26 +9,29 @@ let hasExternalRef = false;
 
 for (const file of files) {
   const content = fs.readFileSync(path.join(vendorDir, file), "utf8");
-  // Simple check: look for import ... from "./" pattern
-  // Use a simpler regex to avoid backtracking issues
-  const importMatches = content.matchAll(/import\s+[^;]+from\s+["'](\.\/[^"']+)["']/g);
-  for (const match of importMatches) {
+  // Check all import specifiers in ES module import statements at statement boundaries.
+  // Match import/export at start of file or after ; { } newline
+  // Patterns:
+  //   import ... from "..." (with optional whitespace, minified: no space)
+  //   import "..." (bare import)
+  //   export ... from "..." (re-export)
+  // Skip template literals (contain ${)
+  // Use a regex that matches at statement boundaries
+  const importRegex = /(?:^|[;{}])(?:\s*(?:import|export)\s+(?:[^;]*?\s+from\s*|)["']([^"']+)["'])/g;
+  let match;
+  while ((match = importRegex.exec(content)) !== null) {
     const importPath = match[1];
-    // Check for external CDN references in the import path
-    if (/jsdelivr|cdn\.|unpkg|https?:\/\/|\/npm\//.test(importPath)) {
+    // Skip template literals
+    if (importPath.includes("${")) continue;
+    // Every specifier must start with "./" and must not contain "://", "jsdelivr" or "/npm/"
+    if (!importPath.startsWith("./")) {
+      console.error(`FAIL: ${file} contains non-local import: ${importPath}`);
+      hasExternalRef = true;
+    }
+    if (/:\/\//.test(importPath) || /jsdelivr/i.test(importPath) || /\/npm\//.test(importPath)) {
       console.error(`FAIL: ${file} contains external CDN reference in import: ${importPath}`);
       hasExternalRef = true;
     }
-  }
-  
-  // Also check for any non-local imports (imports that don't start with ./)
-  const nonLocalMatches = content.matchAll(/import\s+[^;]+from\s+["']((?!\.\/)[^"']+)["']/g);
-  for (const match of nonLocalMatches) {
-    const importPath = match[1];
-    // Skip template literals
-    if (importPath && importPath.startsWith("${")) continue;
-    console.error(`FAIL: ${file} contains non-local import: ${importPath}`);
-    hasExternalRef = true;
   }
 }
 

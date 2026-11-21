@@ -3,7 +3,7 @@
 // all imports rewritten to local paths, so this works fully offline.
 // app.js loads this module dynamically; if anything fails, it falls back to the plain <textarea>.
 import { EditorView, keymap, highlightActiveLine } from "./vendor/cm6/@codemirror__view.js";
-import { EditorState, Compartment } from "./vendor/cm6/@codemirror__state.js";
+import { EditorState, Compartment, EditorSelection } from "./vendor/cm6/@codemirror__state.js";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "./vendor/cm6/@codemirror__commands.js";
 import { markdown, markdownLanguage } from "./vendor/cm6/@codemirror__lang-markdown.js";
 import { syntaxHighlighting, HighlightStyle, bracketMatching } from "./vendor/cm6/@codemirror__language.js";
@@ -83,3 +83,5 @@ export function createEditor(host, { value = "", onUpdate, onCommand } = {}) {
       view.dispatch({ effects: editable.reconfigure(EditorView.editable.of(!d)) }),
   };
 }
+
+export { EditorSelection };

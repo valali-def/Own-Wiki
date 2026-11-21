@@ -82,12 +82,16 @@ const store = {
 // ---- CodeMirror 6 editor (lazy-loaded) ----
 let cmModule = null;
 let cmEditor = null; // { view, getValue, setValue, focus, setDisabled }
+let EditorSelection = null; // CM6 EditorSelection class
 
 // Lazy-load CM6 editor module; falls back to null if anything fails
 async function loadCmEditor() {
   if (cmModule !== null) return cmModule; // already loaded or failed
   try {
     cmModule = await import("./cm-editor.js").catch(() => null);
+    if (cmModule && cmModule.EditorSelection) {
+      EditorSelection = cmModule.EditorSelection;
+    }
   } catch (e) {
     cmModule = null;
   }
@@ -96,22 +100,22 @@ async function loadCmEditor() {
 
 // Editor helper functions that work with both CM6 and textarea fallback
 function editorValue() {
-  return cmEditor ? cmEditor.getValue() : $("#editor").value;
+  return cmEditor ? cmEditor.getValue() : $("editor").value;
 }
 
 function setEditorValue(v) {
   if (cmEditor) cmEditor.setValue(v);
-  else $("#editor").value = v;
+  else $("editor").value = v;
 }
 
 function setEditorDisabled(d) {
   if (cmEditor) cmEditor.setDisabled(d);
-  else $("#editor").disabled = d;
+  else $("editor").disabled = d;
 }
 
 function editorFocus() {
   if (cmEditor) cmEditor.focus();
-  else $("#editor").focus();
+  else $("editor").focus();
 }
 
 // Initialize CM6 editor inside #cmHost; returns true if CM6 is active
@@ -119,9 +123,9 @@ async function initCmEditor(initialValue, onUpdate, onCommand) {
   const mod = await loadCmEditor();
   if (!mod || typeof mod.createEditor !== "function") return false;
 
-  const host = $("#cmHost");
+  const host = $("cmHost");
   host.hidden = false;
-  $("#editor").hidden = true;
+  $("editor").hidden = true;
 
   cmEditor = mod.createEditor(host, {
     value: initialValue,
@@ -137,21 +141,86 @@ function useTextareaFallback() {
     cmEditor.view.destroy();
     cmEditor = null;
   }
-  $("#cmHost").hidden = true;
-  $("#editor").hidden = false;
+  $("cmHost").hidden = true;
+  $("editor").hidden = false;
 }
 
 // CM6 helper: wrap selection with prefix/suffix (like wrapSelection for textarea)
 function cmWrapSelection(view, prefix, suffix) {
   const { state } = view;
-  const { selection } = state;
-  const changes = selection.ranges.map((range) => {
-    const from = range.from;
-    const to = range.to;
-    const selected = state.sliceDoc(from, to);
-    return { from, to, insert: prefix + selected + suffix };
+  view.dispatch({
+    changes: state.changesByRange((range) => {
+      const from = range.from;
+      const to = range.to;
+      const selected = state.sliceDoc(from, to);
+      let insert, newAnchor, newHead;
+      if (selected) {
+        // Selected text: wrap it and keep inner text selected
+        insert = prefix + selected + suffix;
+        newAnchor = from + prefix.length;
+        newHead = from + prefix.length + selected.length;
+      } else {
+        // Empty selection: insert prefix+suffix and put cursor between them
+        insert = prefix + suffix;
+        newAnchor = newHead = from + prefix.length;
+      }
+      return { changes: [{ from, to, insert }], range: EditorSelection.range(newAnchor, newHead) };
+    }),
+    selection: EditorSelection.ranges(
+      state.selection.ranges.map((range) => {
+        const from = range.from;
+        const to = range.to;
+        const selected = state.sliceDoc(from, to);
+        if (selected) {
+          return EditorSelection.range(from + prefix.length, from + prefix.length + selected.length);
+        } else {
+          return EditorSelection.cursor(from + prefix.length);
+        }
+      })
+    ),
+    scrollIntoView: true,
   });
-  view.dispatch({ changes, selection: { anchor: changes[0].from, head: changes[0].from + prefix.length + (changes[0].to - changes[0].from - prefix.length - suffix.length) } });
+  view.focus();
+}
+
+// CM6 helper: insert link markup [text](url) and select "url"
+function cmInsertLink(view) {
+  const { state } = view;
+  view.dispatch({
+    changes: state.changesByRange((range) => {
+      const from = range.from;
+      const to = range.to;
+      const selected = state.sliceDoc(from, to);
+      let insert, newAnchor, newHead;
+      if (selected) {
+        // Wrap selected text: [selected](url) and select "url"
+        insert = "[" + selected + "](" + ")";
+        // "url" starts after "[selected](" which is 2 + selected.length + 2 = selected.length + 4
+        newAnchor = from + 2 + selected.length + 2; // after "[selected]("
+        newHead = newAnchor + 3; // "url" is 3 chars
+      } else {
+        // Empty selection: [](url) and select "url"
+        insert = "[](" + ")";
+        // "url" starts after "[](" which is 3 chars
+        newAnchor = from + 3;
+        newHead = newAnchor + 3; // "url" is 3 chars
+      }
+      return { changes: [{ from, to, insert }], range: EditorSelection.range(newAnchor, newHead) };
+    }),
+    selection: EditorSelection.ranges(
+      state.selection.ranges.map((range) => {
+        const from = range.from;
+        const to = range.to;
+        const selected = state.sliceDoc(from, to);
+        if (selected) {
+          return EditorSelection.range(from + 2 + selected.length + 2, from + 2 + selected.length + 2 + 3);
+        } else {
+          return EditorSelection.range(from + 3, from + 6);
+        }
+      })
+    ),
+    scrollIntoView: true,
+  });
   view.focus();
 }
 
@@ -307,8 +376,8 @@ async function leaveEditor() {
     cmEditor = null;
   }
   // Ensure textarea is visible for next edit
-  $("#cmHost").hidden = true;
-  $("#editor").hidden = false;
+  $("cmHost").hidden = true;
+  $("editor").hidden = false;
   $("editorWrap").hidden = true;
   $("view").hidden = false;
   return true;
@@ -595,7 +664,8 @@ async function openEditor() {
   const cmActive = await initCmEditor(pageContent, (val) => {
     dirty = true;
     setStatus("Unsaved");
-    pageContent = val;
+    // pageContent must only change in save(), otherwise "Discard unsaved changes"
+    // still shows the unsaved text. Keep dirty/status/preview updates only.
     if (!$("preview").hidden) {
       $("preview").innerHTML = md(val);
     }
@@ -614,7 +684,7 @@ async function openEditor() {
       return true;
     }
     if (name === "link") {
-      cmWrapSelection(view, "[", "](" + ")");
+      cmInsertLink(view);
       return true;
     }
     return false;
@@ -668,7 +738,7 @@ $("editor").addEventListener("keydown", (e) => {
       wrapSelection("*", "*");
     } else if (e.key === "k") {
       e.preventDefault();
-      wrapSelection("[", "](" + ")");
+      insertLink();
     }
   }
 });
@@ -684,17 +754,50 @@ document.addEventListener("keydown", (e) => {
 
 // Helper: wrap selected text in textarea with prefix/suffix
 function wrapSelection(prefix, suffix) {
-  const ta = $("#editor");
+  const ta = $("editor");
   const start = ta.selectionStart;
   const end = ta.selectionEnd;
   const text = ta.value;
   const selected = text.slice(start, end);
   ta.value = text.slice(0, start) + prefix + selected + suffix + text.slice(end);
-  // Restore selection to cover the inserted text
-  ta.selectionStart = start;
-  ta.selectionEnd = start + prefix.length + selected.length + suffix.length;
+  // Restore selection: if there was a selection, keep it selected (inner text);
+  // if empty, put cursor between prefix and suffix
+  if (selected) {
+    ta.selectionStart = start + prefix.length;
+    ta.selectionEnd = start + prefix.length + selected.length;
+  } else {
+    ta.selectionStart = ta.selectionEnd = start + prefix.length;
+  }
   ta.focus();
   // Trigger input event for live preview
+  ta.dispatchEvent(new Event("input"));
+}
+
+// Helper: insert link markup [text](url) and select "url" in textarea
+function insertLink() {
+  const ta = $("editor");
+  const start = ta.selectionStart;
+  const end = ta.selectionEnd;
+  const text = ta.value;
+  const selected = text.slice(start, end);
+  let insert, newStart, newEnd;
+  if (selected) {
+    // Wrap selected text: [selected](url) and select "url"
+    insert = "[" + selected + "](" + ")";
+    // "url" starts after "[selected](" which is 2 + selected.length + 2
+    newStart = start + 2 + selected.length + 2;
+    newEnd = newStart + 3; // "url" is 3 chars
+  } else {
+    // Empty selection: [](url) and select "url"
+    insert = "[](" + ")";
+    // "url" starts after "[](" which is 3 chars
+    newStart = start + 3;
+    newEnd = newStart + 3; // "url" is 3 chars
+  }
+  ta.value = text.slice(0, start) + insert + text.slice(end);
+  ta.selectionStart = newStart;
+  ta.selectionEnd = newEnd;
+  ta.focus();
   ta.dispatchEvent(new Event("input"));
 }
 window.addEventListener("beforeunload", (e) => {

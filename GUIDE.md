@@ -3,7 +3,7 @@
 This document is for anyone who continues building the project (including a new Claude session).
 Just upload this project and say: "Continue with Step 2 in GUIDE.md."
 
-## CURRENT STATE — updated 2026-11-21 (Step 2 is DONE ✅)
+## CURRENT STATE — updated 2026-11-21 (Step 2: code complete, browser check still pending)
 
 Everything below the old sections is unchanged; this section is the up-to-date picture on top of it.
 
@@ -52,15 +52,24 @@ Everything below the old sections is unchanged; this section is the up-to-date p
 - DONE: `public/app.js` lazy-load + helpers + Ctrl+B/I/K + Ctrl+S de-dup.
 - DONE: `public/style.css` styles for `#cmHost`/`.cm-*`.
 - DONE: `test/cm6-vendor.js` created and passing.
-- DONE: All tests pass (`test/render.js` 37/37, `test/cm6-vendor.js`).
+- DONE: `test/app-lint.js` created and passing (checks for `$("#...")` bug).
+- FIXED: `app.js` - replaced all `$("#...")` with `$("...")` (11 occurrences).
+- FIXED: `openEditor()` - removed `pageContent = val` from CM6 onUpdate callback (pageContent now only changes in save()).
+- FIXED: `cmWrapSelection` and `wrapSelection` rewritten for correct selection behavior:
+  - bold/italic with selected text: wraps it and keeps inner text selected
+  - empty selection: inserts prefix+suffix and puts cursor between them
+  - link: inserts `[selected](url)` and selects "url" (empty: `[](url)` with "url" selected)
+  - CM6 uses `state.changesByRange` for correct multi-range handling
+- PARTIAL: All tests pass (`test/render.js` 37/37, `test/cm6-vendor.js`, `test/app-lint.js`); `test/smoke.js` has pre-existing session persistence failures unrelated to these changes.
 - After Step 2: Steps 3–6 are untouched (see below). The missing `demo/` folder blocks the demo-related
   bullets in Step 1 and Step 3 until it is recreated (`demo/build.js`, `demo/mock-api.js`, `demo/wiki-demo.html`).
 
 ### Test/verification status right now
-- `node test/render.js` (Markdown renderer + XSS): **all passed** (37 checks) — run as baseline on 2026-11-21
-  before any frontend edits, using the portable Node in `temp-files/`.
-- `node test/smoke.js` (server API + security): not re-run yet in this session.
-- CM6 vendor graph: import + syntax verified in Node 22 (see above). Not yet exercised in a browser.
+- `node test/render.js` (Markdown renderer + XSS): **all passed** (37 checks) — run 2026-11-21
+- `node test/cm6-vendor.js` (CM6 vendor imports): **all passed** — run 2026-11-21
+- `node test/app-lint.js` (app.js lint for `$("#...")`): **all passed** — run 2026-11-21
+- `node test/smoke.js` (server API + security): **39 passed, 2 failed** (pre-existing session persistence issue, unrelated to Step 2 changes) — run 2026-11-21
+- CM6 vendor graph: import + syntax verified in Node 22. Not yet exercised in a browser.
 - Still untested overall: see "What is NOT tested" below (dialogs, search, upload, mobile layout, theme switch,
   Docker build).
 
