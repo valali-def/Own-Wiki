@@ -754,16 +754,16 @@ async function uploadFiles(files) {
   const previousStatus = $('status').textContent;
 
   for (const file of files) {
-    const ext = (file.name && file.name.includes('.')) ? file.name.slice(file.name.lastIndexOf('.')).toLowerCase() : '';
+    // Determine the name to send to the server first (generates name for pasted files with no name/ext)
+    let name = file.name;
+    if (!name || name === 'image.png' || name === 'blob') {
+      name = generatePasteName('.png'); // default to .png for pasted screenshots
+    }
+    // Now check the extension of the FINAL name (after generation)
+    const ext = name.includes('.') ? name.slice(name.lastIndexOf('.')).toLowerCase() : '';
     if (!ALLOWED_EXTS.has(ext)) {
       await uiAlert(`File type "${ext || 'unknown'}" not allowed. Allowed: png, jpg, jpeg, gif, webp, svg, pdf`);
       continue;
-    }
-
-    // Determine the name to send to the server
-    let name = file.name;
-    if (!name || name === 'image.png' || name === 'blob') {
-      name = generatePasteName(ext || '.png');
     }
 
     setStatus('Uploading...');

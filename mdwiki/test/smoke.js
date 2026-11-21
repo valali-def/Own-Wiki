@@ -1,5 +1,8 @@
 'use strict';
 // Smoke test for server.js. Usage: node test/smoke.js   (starts its own server on a temp data dir)
+// NOTE: On Windows, exactly 2 failures in "Sessions + restart" are expected:
+// srv.kill() is a hard kill (no SIGTERM), so graceful shutdown doesn't run.
+// Session persistence was confirmed working in the Docker test (Linux, graceful shutdown).
 const { spawn } = require('child_process');
 const fs = require('fs'), os = require('os'), path = require('path');
 const PORT = 3900 + Math.floor(Math.random() * 90);
