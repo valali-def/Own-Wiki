@@ -607,11 +607,14 @@ function applyTheme(theme) {
   $("themeToggle").textContent =
     theme === "empire" ? "Leave the Empire" : theme === "dark" ? "Switch to light mode" : "Switch to dark mode";
 
-  // Re-render dynamic UI parts that use t()
-  renderNav();
-  renderDetails();
-  renderActions();
-  renderCrumbs();
+  // Re-render dynamic UI parts that use t() only when app is visible
+  // (avoids TDZ errors during initial load before chain/all/ctxFolder are defined)
+  if (!$("app").hidden) {
+    renderNav();
+    renderDetails();
+    renderActions();
+    renderCrumbs();
+  }
 }
 $("themeToggle").onclick = () =>
   applyTheme(
