@@ -77,7 +77,7 @@ t('wiki path form','[[Technik/Homelab/Docker]]',['data-p="Technik/Homelab/Docker
 // link inside a code span stays literal
 t('wiki code span','text `[[PageA]]` more',['<code>[[PageA]]</code>'],['href="#']);
 // XSS in name: [[<img src=x onerror=alert(1)>]]
-t('wiki xss name','[[]'+'<img src=x onerror=alert(1)>'+']]',['\u0026lt;img src=x onerror=alert(1)\u0026gt;'],['<img src=x']);
+t('wiki xss name','[['+'<img src=x onerror=alert(1)>'+']]',['\u0026lt;img src=x onerror=alert(1)\u0026gt;'],['<img src=x']);
 // XSS in label: [[PageA|<img src=x onerror=alert(1)>]]
 t('wiki xss label','[[PageA|'+'<img src=x onerror=alert(1)>' +']]',['\u0026lt;img'],['<img']);
 // same-book preference: sel is a page in Book2 → [[PageA]] resolves to Book2/PageA.md
@@ -85,9 +85,9 @@ globalThis.sel = 'Book2/PageB.md';
 t('wiki same book','[[PageA]]',['data-p="Book2/PageA.md"'],['Book1/PageA']);
 // spaces [[ PageA | Label ]] are trimmed
 globalThis.sel = '';
-t('wiki spaces','[[ PageA | My Label ]]',['data-p="Book1/PageA.md"','>My Label<'],['PageA ',' Label']);
-// data-p is DECODED (no %2F)
-t('wiki data-p decoded','[[PageA]]',['data-p="Book1/PageA.md"'],['%2F']);
+t('wiki spaces','[[ PageA | My Label ]]',['data-p="Book1/PageA.md"','>My Label<'],['wikilink-missing']);
+// data-p is DECODED (no %2F); the href keeps %2F on purpose
+t('wiki data-p decoded','[[PageA]]',['data-p="Book1/PageA.md"'],['data-p="Book1%2F']);
 
 console.log(fail?`\n${fail} FAILED`:'\nall passed');
 process.exit(fail?1:0);

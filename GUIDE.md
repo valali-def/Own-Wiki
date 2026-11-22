@@ -270,7 +270,7 @@ Rules:
 
 ### Testing
 - Tests in `test/render.js`: plain link, link with label, missing page, same name in two books, path form, link inside code span, XSS in name and label.
-- All 37 original render tests pass; wiki link tests pass.
+- All 37 original render tests pass; all 46 tests in test/render.js pass, including the 11 wiki link tests ("all passed", exit code 0).
 - Run: `& '...\\temp-files\\node\\node-v22.14.0-win-x64\\node.exe' mdwiki\\test\\render.js`
 - Browser check pending (unsaved-changes protection on preview clicks behaves like other internal links).
 
