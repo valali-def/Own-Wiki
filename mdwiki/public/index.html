@@ -23,30 +23,30 @@
   <form id="loginForm">
     <svg class="logo-big"><use href="#i-logo"/></svg>
     <h1>Own Wiki</h1>
-    <input id="pw" type="password" placeholder="Password" autofocus autocomplete="current-password">
-    <button class="primary">Log in</button>
+    <input id="pw" type="password" placeholder="Password" autofocus autocomplete="current-password" data-t="pw.placeholder">
+    <button class="primary" data-t="login.submit">Log in</button>
     <p id="loginErr"></p>
   </form>
 </div>
 
 <div id="app" hidden>
   <header id="top">
-    <a id="logo" href="#" title="Home"><img class="logo-empire" src="img/empire-logo.svg" alt=""><svg><use href="#i-logo"/></svg><span>Own Wiki</span></a>
+    <a id="logo" href="#" title="Home"><img class="logo-empire" src="img/empire-logo.svg" alt=""><svg><use href="#i-logo"/></svg><span data-t="logo.title">Own Wiki</span></a>
     <div id="searchWrap">
       <svg><use href="#i-search"/></svg>
-      <input id="search" placeholder="Search…" autocomplete="off">
+      <input id="search" placeholder="Search…" autocomplete="off" data-t="search.placeholder">
     </div>
     <nav id="topnav">
-      <button data-view="shelves"><svg><use href="#i-shelf"/></svg><span>Shelves</span></button>
-      <button data-view="books"><svg><use href="#i-book"/></svg><span>Books</span></button>
-      <button data-view="chapters"><svg><use href="#i-chapter"/></svg><span>Chapters</span></button>
+      <button data-view="shelves"><svg><use href="#i-shelf"/></svg><span data-t="nav.shelves">Shelves</span></button>
+      <button data-view="books"><svg><use href="#i-book"/></svg><span data-t="nav.books">Books</span></button>
+      <button data-view="chapters"><svg><use href="#i-chapter"/></svg><span data-t="nav.chapters">Chapters</span></button>
     </nav>
     <div id="acct">
       <button id="acctBtn" title="Account"><svg><use href="#i-user"/></svg></button>
       <div id="acctMenu" hidden>
         <button id="themeToggle">Switch to light mode</button>
-        <button id="downloadBackup">Download backup</button>
-        <button id="logout">Log out</button>
+        <button id="downloadBackup" data-t="acct.downloadBackup">Download backup</button>
+        <button id="logout" data-t="acct.logout">Log out</button>
       </div>
     </div>
   </header>
@@ -55,24 +55,24 @@
 
   <div id="layout">
     <aside id="navSide">
-      <div class="side-title">Navigation</div>
+      <div class="side-title" data-t="side.nav">Navigation</div>
       <div id="tree"></div>
     </aside>
 
     <main id="content">
-      <div id="view"><p class="muted">No page open</p></div>
+      <div id="view"><p class="muted" data-t="view.noPage">No page open</p></div>
 
       <div id="editorWrap" hidden>
         <div class="bar">
-          <span id="current">No page open</span>
+          <span id="current" data-t="editor.noPage">No page open</span>
           <span id="status"></span>
           <div class="seg" id="modeSwitch">
             <button data-mode="md" class="on">Markdown</button>
             <button data-mode="split">Markdown + Preview</button>
           </div>
           <button id="autosaveToggle" class="seg-btn" title="Toggle autosave">Autosave: off</button>
-          <button id="save" class="primary" disabled>Save</button>
-          <button id="closeEdit">Close</button>
+          <button id="save" class="primary" disabled data-t="editor.save">Save</button>
+          <button id="closeEdit" data-t="editor.close">Close</button>
         </div>
         <div id="panes" class="md">
           <div id="cmHost" hidden></div>
@@ -83,15 +83,15 @@
     </main>
 
     <aside id="actSide">
-      <div class="side-title">Details</div>
+      <div class="side-title" data-t="side.details">Details</div>
       <div id="details" class="muted">–</div>
-      <div class="side-title">Actions</div>
+      <div class="side-title" data-t="side.actions">Actions</div>
       <div id="actions">
-        <button id="edit" disabled>Edit</button>
-        <button id="newPage">New page</button>
-        <button id="newFolder">New folder</button>
-        <button id="rename" disabled>Rename / Move</button>
-        <button id="delete" class="danger" disabled>Delete</button>
+        <button id="edit" disabled data-t="act.edit">Edit</button>
+        <button id="newPage" data-t="act.newPage">New page</button>
+        <button id="newFolder" data-t="act.newFolder">New folder</button>
+        <button id="rename" disabled data-t="act.rename">Rename / Move</button>
+        <button id="delete" class="danger" disabled data-t="act.delete">Delete</button>
       </div>
     </aside>
   </div>

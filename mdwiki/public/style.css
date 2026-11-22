@@ -195,3 +195,18 @@ button.danger-solid:hover:not(:disabled) { filter: brightness(1.1); background: 
 [data-theme="empire"] .md-body th { background: var(--valor); color: #fff; }
 [data-theme="empire"] .md-body pre { border-left: 3px solid var(--valor); }
 
+/* ===== Boot overlay (empire theme activation) ===== */
+#empireBoot {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: #000;
+  color: #fff;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  display: grid;
+  place-items: center;
+  line-height: 1.6;
+}
+#empireBoot .ok { color: #bc1e22; }
+#empireBoot.fade-out { opacity: 0; transition: opacity 0.2s ease; }
+

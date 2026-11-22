@@ -40,8 +40,8 @@ function uiDialog({ message, input, value, ok = "OK", cancel = "Cancel", danger 
   });
 }
 const uiPrompt = (message, value) => uiDialog({ message, input: true, value });
-const uiConfirm = (message) => uiDialog({ message, ok: /delete/i.test(message) ? "Delete" : "OK", danger: /delete/i.test(message) });
-const uiAlert = (message) => uiDialog({ message, alertOnly: true });
+const uiConfirm = (message, { danger = false } = {}) => uiDialog({ message, ok: danger ? t("dialog.ok", "Delete") : t("dialog.ok", "OK"), cancel: t("dialog.cancel", "Cancel"), danger });
+const uiAlert = (message) => uiDialog({ message, alertOnly: true, ok: t("dialog.ok", "OK") });
 
 "use strict";
 const $ = (id) => document.getElementById(id);
@@ -63,6 +63,99 @@ const LABEL = {
   chapter: "Chapter",
   page: "Page",
 };
+// Empire theme translations
+const EMPIRE_TEXT = {
+  // Level names
+  "level.shelf": "Sector",
+  "level.book": "Archive",
+  "level.chapter": "Division",
+  "level.page": "Dossier",
+  "level.shelf.plural": "Sectors",
+  "level.book.plural": "Archives",
+  "level.chapter.plural": "Divisions",
+  "level.page.plural": "Dossiers",
+  // Login
+  "login.submit": "Identify",
+  "pw.placeholder": "Imperial access code",
+  // Search
+  "search.placeholder": "Search the archives…",
+  // Auth state
+  "auth.denied": "Access denied",
+  // Navigation
+  "logo.title": "Own Wiki",
+  "nav.shelves": "Shelves",
+  "nav.books": "Books",
+  "nav.chapters": "Chapters",
+  // Breadcrumbs
+  "crumbs.home": "Command",
+  // Side titles
+  "side.nav": "Navigation",
+  "side.details": "Intel",
+  "side.actions": "Orders",
+  // Account menu
+  "acct.downloadBackup": "Secure the archives",
+  "acct.logout": "Stand down",
+  // Editor
+  "editor.noPage": "No page open",
+  "editor.save": "Confirm",
+  "editor.close": "Dismiss",
+  // Actions
+  "act.edit": "Revise",
+  "act.newPage": "New dossier",
+  "act.newFolder": "New folder",
+  "act.rename": "Reassign",
+  "act.delete": "Eliminate",
+  // View
+  "view.noPage": "No dossier open",
+  // Dialog buttons
+  "dialog.ok": "Acknowledged",
+  "dialog.cancel": "Abort",
+  // Details labels
+  "details.type": "Type",
+  "details.name": "Name",
+  "details.path": "Path",
+  "details.words": "Words",
+  "details.contains": "Contains",
+  // Confirm messages
+  "confirm.delete": "Eliminate {path}{folderSuffix}? This cannot be undone.",
+  "confirm.discard": "Unsaved changes will be destroyed. Proceed?",
+  // Prompts
+  "prompt.newPage": "Name the new dossier (in {ctx}):",
+  "prompt.newPage.root": "Name the new dossier:",
+  "prompt.newFolder": "Name the new {what} (in {ctx}):",
+  "prompt.newFolder.root": "Name the new {what}:",
+  "prompt.rename": "New designation (reassign):",
+  // Status
+  "status.unsaved": "Pending",
+  "status.saved": "Confirmed {time}",
+  "status.saving": "Processing...",
+  "status.autosaveFailed": "Transmission failed",
+  "status.preparingBackup": "Securing the archives...",
+  "status.uploading": "Transmitting...",
+  "status.closeEditorToSearch": "Dismiss the editor to search",
+  // Search results
+  "search.nothingFound": "Sector not found.",
+  "nav.search": "Search",
+  // Empty states
+  "empty.noShelves": "No sectors under Imperial control.",
+  "empty.nothingHere": "No sectors established. Use “New sector” to begin.",
+  "empty.folder": "Empty. Issue orders on the right to add content.",
+  "empty.page": "This dossier is empty. Select “Revise” to write.",
+  // Wiki link missing
+  "wikilink.missing": "Dossier not found",
+};
+// Returns empire text if theme is empire, otherwise default
+function t(key, defaultText) {
+  if (typeof document !== "undefined" && document.documentElement?.dataset?.theme === "empire" && EMPIRE_TEXT[key]) {
+    return EMPIRE_TEXT[key];
+  }
+  return defaultText;
+}
+// Helper to get plural level name
+function levelName(kind, plural = false) {
+  const key = plural ? `level.${kind}.plural` : `level.${kind}`;
+  return t(key, LABEL[kind] + (plural && !kind.endsWith("s") ? "s" : ""));
+}
 const ico = (k) => `<svg><use href="#${ICON[k]}"/></svg>`;
 const store = {
   get: (k) => {
@@ -237,7 +330,7 @@ async function api(method, url, body) {
   const r = await fetch(url, opt);
   if (r.status === 401 && url !== "/api/login") {
     showLogin();
-    throw new Error("Not logged in");
+    throw new Error(t("auth.denied", "Not logged in"));
   }
   const data = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(data.error || "Error " + r.status);
@@ -251,6 +344,17 @@ const setStatus = (t) => {
 // Rendered with "marked" (public/vendor/marked.umd.js, served locally so it works offline).
 // Safety rules (do not remove): raw HTML in the text is ESCAPED, never rendered,
 // and link/image addresses must pass safeUrl() (no javascript:, data:, vbscript: ...).
+// Empire theme translation helper (also used in tests where document/EMPIRE_TEXT not available)
+function t(key, defaultText) {
+  try {
+    if (typeof document !== "undefined" && document.documentElement?.dataset?.theme === "empire" && EMPIRE_TEXT[key]) {
+      return EMPIRE_TEXT[key];
+    }
+  } catch (e) {
+    // EMPIRE_TEXT not defined (test context)
+  }
+  return defaultText;
+}
 function safeUrl(u) {
   u = String(u || "").trim();
   // allowed: http(s), mailto, tel, absolute or relative paths, #anchors, and addresses without a scheme
@@ -363,7 +467,7 @@ const wikiLinkExt = {
       const decodedPath = decodeURIComponent(rawPath);
       return `<a href="${safeHref}" data-p="${esc(decodedPath)}">${safeLabel}</a>`;
     } else {
-      return `<span class="wikilink-missing" title="Page not found">${safeLabel}</span>`;
+      return `<span class="wikilink-missing" title="${esc(t("wikilink.missing", "Page not found"))}">${safeLabel}</span>`;
     }
   },
 };
@@ -425,7 +529,7 @@ $("logout").onclick = async () => {
 };
 $("downloadBackup").onclick = async () => {
   const previousStatus = $("status").textContent;
-  setStatus("Preparing backup...");
+  setStatus(t("status.preparingBackup", "Preparing backup..."));
   try {
     const res = await fetch("/api/export", { credentials: "include" });
     if (!res.ok) {
@@ -448,7 +552,8 @@ $("downloadBackup").onclick = async () => {
     await uiAlert("Export failed: " + e.message);
   } finally {
     // Restore status only if it still says "Preparing backup..."
-    if ($("status").textContent === "Preparing backup...") {
+    const preparingText = t("status.preparingBackup", "Preparing backup...");
+    if ($("status").textContent === preparingText) {
       setStatus(previousStatus);
     }
     $("acctMenu").hidden = true;
@@ -461,11 +566,61 @@ $("acctBtn").onclick = (e) => {
 document.addEventListener("click", () => {
   $("acctMenu").hidden = true;
 });
+// Store for original texts to restore when leaving empire
+const originalTexts = new Map();
 function applyTheme(t) {
+  const wasEmpire = document.documentElement.dataset.theme === "empire";
+  const becomingEmpire = t === "empire";
+
+  if (wasEmpire && !becomingEmpire) {
+    // Leaving empire: restore original texts
+    for (const [el, data] of originalTexts) {
+      if (data.attr === "textContent") {
+        el.textContent = data.value;
+      } else if (data.attr === "placeholder") {
+        el.placeholder = data.value;
+      } else if (data.attr === "title") {
+        el.title = data.value;
+      }
+    }
+    originalTexts.clear();
+  } else if (becomingEmpire && !wasEmpire) {
+    // Entering empire: store originals and apply translations
+    document.querySelectorAll("[data-t]").forEach((el) => {
+      const key = el.dataset.t;
+      if (key) {
+        if (el.tagName === "INPUT" && el.hasAttribute("placeholder")) {
+          originalTexts.set(el, { attr: "placeholder", value: el.placeholder });
+          el.placeholder = t(key, el.placeholder);
+        } else if (el.hasAttribute("title")) {
+          originalTexts.set(el, { attr: "title", value: el.title });
+          el.title = t(key, el.title);
+        } else {
+          originalTexts.set(el, { attr: "textContent", value: el.textContent });
+          el.textContent = t(key, el.textContent);
+        }
+      }
+    });
+  }
+
   document.documentElement.dataset.theme = t;
   store.set("theme", t);
   $("themeToggle").textContent =
     t === "empire" ? "Leave the Empire" : t === "dark" ? "Switch to light mode" : "Switch to dark mode";
+
+  // Re-render dynamic UI parts that use t()
+  if (becomingEmpire || wasEmpire) {
+    renderNav();
+    renderDetails();
+    renderActions();
+    renderCrumbs();
+    // Update status if showing a status message
+    const statusEl = $("status");
+    if (statusEl.textContent) {
+      // Status messages are set via setStatus() which uses t()
+      // They will update on next render or action
+    }
+  }
 }
 $("themeToggle").onclick = () =>
   applyTheme(
@@ -509,7 +664,7 @@ const all = () => [...index.values()];
 // ---- Navigation / views ----
 async function leaveEditor() {
   if (!editing) return true;
-  if (dirty && !await uiConfirm("Discard unsaved changes?")) return false;
+  if (dirty && !await uiConfirm(t("confirm.discard", "Discard unsaved changes?"))) return false;
   editing = false;
   dirty = false;
   cancelAutosave();
@@ -577,21 +732,23 @@ function showHome() {
     title("shelf", "Own Wiki") +
       (top.length
         ? cards(top)
-        : '<p class="muted">Nothing here yet. Use “New shelf” on the right to start.</p>'),
+        : `<p class="muted">${esc(t("empty.nothingHere", 'Nothing here yet. Use “New shelf” on the right to start.'))}</p>`),
   );
   chrome();
 }
 function showList(kind) {
   const d = { shelves: 1, books: 2, chapters: 3 }[kind],
     k = { shelves: "shelf", books: "book", chapters: "chapter" }[kind];
-  const label = kind[0].toUpperCase() + kind.slice(1),
+  const label = levelName(k, true),
     nodes = all().filter((n) => n.type === "folder" && n.depth === d);
   sel = "";
+  const emptyKey = k === "shelf" ? "empty.noShelves" : `empty.no${label}`;
+  const emptyDefault = k === "shelf" ? "No shelves yet." : `No ${label} yet.`;
   setView(
     title(k, label) +
       (nodes.length
         ? cards(nodes, true)
-        : `<p class="muted">No ${kind} yet.</p>`),
+        : `<p class="muted">${esc(t(emptyKey, emptyDefault))}</p>`),
   );
   chrome(label);
 }
@@ -601,7 +758,7 @@ function showFolder(n) {
     title(n.kind, n.name) +
       (n.children.length
         ? cards(n.children)
-        : '<p class="muted">Empty. Use the actions on the right to add something.</p>'),
+        : `<p class="muted">${esc(t("empty.folder", 'Empty. Use the actions on the right to add something.'))}</p>`),
   );
   chrome();
 }
@@ -616,7 +773,7 @@ function renderPageView() {
   setView(
     pageContent.trim()
       ? `<div class="md-body">${md(pageContent)}</div>`
-      : '<p class="muted">This page is empty. Click “Edit” to write.</p>',
+      : `<p class="muted">${esc(t("empty.page", 'This page is empty. Click “Edit” to write.'))}</p>`,
   );
 }
 
@@ -635,7 +792,7 @@ function chrome(listLabel) {
   } catch (e) {}
 }
 function renderCrumbs(label) {
-  const parts = ['<a data-p="">Home</a>'];
+  const parts = [`<a data-p="">${esc(t("crumbs.home", "Home"))}</a>`];
   for (const n of chain(sel))
     parts.push(
       `<a class="t-${n.kind}" data-p="${esc(n.path)}">${ico(n.kind)}${esc(n.name)}</a>`,
@@ -700,7 +857,7 @@ function renderNav() {
     null;
   document.querySelector("#navSide .side-title").textContent = root
     ? root.name
-    : "Shelves";
+    : t("side.nav", "Shelves");
   $("tree").innerHTML = root
     ? root.children.map(nodeHtml).join("") || '<p class="muted">Empty</p>'
     : tree
@@ -715,14 +872,14 @@ function renderDetails() {
     cnt = (k) => all().filter((x) => x.kind === k).length;
   if (!n) {
     $("details").innerHTML =
-      `Shelves: ${cnt("shelf")}<br>Books: ${cnt("book")}<br>Chapters: ${cnt("chapter")}<br>Pages: ${cnt("page")}`;
+      `${t("level.shelf.plural", "Shelves")}: ${cnt("shelf")}<br>${t("level.book.plural", "Books")}: ${cnt("book")}<br>${t("level.chapter.plural", "Chapters")}: ${cnt("chapter")}<br>${t("level.page.plural", "Pages")}: ${cnt("page")}`;
     return;
   }
-  let h = `Type: ${LABEL[n.kind]}<br>Name: ${esc(n.name)}<br>Path: ${esc(n.path)}`;
+  let h = `${t("details.type", "Type")}: ${esc(levelName(n.kind))}<br>${t("details.name", "Name")}: ${esc(n.name)}<br>${t("details.path", "Path")}: ${esc(n.path)}`;
   if (n.type === "page") {
     const w = (pageContent.trim().match(/\S+/g) || []).length;
-    h += `<br>Words: ${w}`;
-  } else h += `<br>Contains: ${sub(n)}`;
+    h += `<br>${t("details.words", "Words")}: ${w}`;
+  } else h += `<br>${t("details.contains", "Contains")}: ${sub(n)}`;
   $("details").innerHTML = h;
 }
 const ctxFolder = () => {
@@ -733,10 +890,18 @@ function renderActions() {
   const n = index.get(sel),
     ctx = ctxFolder(),
     d = ctx ? ctx.depth : 0;
+  const canAct = !!ctx && !editing;
   $("edit").disabled = !(n && n.type === "page") || editing;
-  $("rename").disabled = $("delete").disabled = !n;
-  $("newFolder").textContent =
-    "New " + (["shelf", "book", "chapter"][d] || "folder");
+  $("newPage").disabled = !canAct;
+  $("newFolder").disabled = !canAct;
+  $("rename").disabled = !n || editing;
+  $("delete").disabled = !n || editing;
+  const kinds = ["shelf", "book", "chapter"];
+  const kind = kinds[d] || "folder";
+  // Store kind in data attribute to avoid reading textContent
+  $("newFolder").dataset.kind = kind;
+  // Use t() for the label, default to "New {levelName}"
+  $("newFolder").textContent = t("act.newFolder", `New ${levelName(kind)}`);
 }
 for (const id of ["view", "crumbs", "tree"])
   $(id).addEventListener("click", (e) => {
@@ -779,9 +944,10 @@ for (const b of document.querySelectorAll("#topnav button"))
 // ---- Actions ----
 $("newPage").onclick = async () => {
   const ctx = ctxFolder();
-  let name = await uiPrompt(
-    "Name of the new page" + (ctx ? ` (in ${ctx.path})` : "") + ":",
-  );
+  const promptKey = ctx ? "prompt.newPage" : "prompt.newPage.root";
+  const promptTpl = t(promptKey, "Name of the new page" + (ctx ? ` (in ${ctx.path})` : "") + ":");
+  const promptMsg = promptTpl.replace("{ctx}", ctx ? ctx.path : "");
+  let name = await uiPrompt(promptMsg);
   if (!name) return;
   if (!(await leaveEditor())) return;
   name = name.replace(/\.md$/i, "");
@@ -797,10 +963,12 @@ $("newPage").onclick = async () => {
 };
 $("newFolder").onclick = async () => {
   const ctx = ctxFolder(),
-    what = $("newFolder").textContent.replace("New ", "");
-  const name = await uiPrompt(
-    `Name of the new ${what}` + (ctx ? ` (in ${ctx.path})` : "") + ":",
-  );
+    kind = $("newFolder").dataset.kind || "folder",
+    what = levelName(kind);
+  const promptKey = ctx ? "prompt.newFolder" : "prompt.newFolder.root";
+  const promptTpl = t(promptKey, `Name of the new ${what}` + (ctx ? ` (in ${ctx.path})` : "") + ":");
+  const promptMsg = promptTpl.replace("{what}", what).replace("{ctx}", ctx ? ctx.path : "");
+  const name = await uiPrompt(promptMsg);
   if (!name) return;
   if (!(await leaveEditor())) return;
   const p = (ctx ? ctx.path + "/" : "") + name;
@@ -815,7 +983,7 @@ $("newFolder").onclick = async () => {
 $("rename").onclick = async () => {
   const n = index.get(sel);
   if (!n) return;
-  let to = await uiPrompt("New path (rename or move):", n.path);
+  let to = await uiPrompt(t("prompt.rename", "New path (rename or move):"), n.path);
   if (!to || to === n.path) return;
   if (!(await leaveEditor())) return;
   if (n.type === "page" && !/\.md$/i.test(to)) to += ".md";
@@ -830,14 +998,11 @@ $("rename").onclick = async () => {
 $("delete").onclick = async () => {
   const n = index.get(sel);
   if (!n) return;
-  if (
-    !await uiConfirm(
-      "Really delete: " +
-        n.path +
-        (n.type === "folder" ? " (including everything inside)" : "") +
-        "?",
-    )
-  )
+  const folderSuffix = n.type === "folder" ? " (including everything inside)" : "";
+  const msg = t("confirm.delete", "Really delete: " + n.path + folderSuffix + "?")
+    .replace("{path}", n.path)
+    .replace("{folderSuffix}", folderSuffix);
+  if (!await uiConfirm(msg, { danger: true }))
     return;
   if (!(await leaveEditor())) return;
   try {
@@ -876,7 +1041,7 @@ async function openEditor() {
   // Try to initialize CM6 editor
   const cmActive = await initCmEditor(pageContent, (val) => {
     dirty = true;
-    setStatus("Unsaved");
+    setStatus(t("status.unsaved", "Unsaved"));
     scheduleAutosave();
     // pageContent must only change in save(), otherwise "Discard unsaved changes"
     // still shows the unsaved text. Keep dirty/status/preview updates only.
@@ -928,21 +1093,22 @@ async function save(opts = {}) {
   if (isAutosave) {
     if (autosaveSaving || !dirty) return;
     autosaveSaving = true;
-    setStatus("Saving...");
+    setStatus(t("status.saving", "Saving..."));
   }
   try {
     await api("PUT", "/api/page", { path: sel, content: editorValue() });
     pageContent = editorValue();
     dirty = false;
+    const time = new Date().toLocaleTimeString();
     if (isAutosave) {
-      setStatus("Saved " + new Date().toLocaleTimeString());
+      setStatus(t("status.saved", "Saved " + time).replace("{time}", time));
     } else {
-      setStatus("Saved " + new Date().toLocaleTimeString());
+      setStatus(t("status.saved", "Saved " + time).replace("{time}", time));
     }
     renderDetails();
   } catch (e) {
     if (isAutosave) {
-      setStatus("Autosave failed");
+      setStatus(t("status.autosaveFailed", "Autosave failed"));
       // page stays dirty, no retry loop
     } else {
       throw e;
@@ -991,7 +1157,7 @@ $("save").onclick = () => save().catch((x) => uiAlert(x.message));
 let raf = 0;
 $("editor").addEventListener("input", () => {
   dirty = true;
-  setStatus("Unsaved");
+  setStatus(t("status.unsaved", "Unsaved"));
   scheduleAutosave();
   if (!$("preview").hidden && !raf)
     raf = requestAnimationFrame(() => {
@@ -1060,7 +1226,7 @@ async function uploadFiles(files) {
       continue;
     }
 
-    setStatus('Uploading...');
+    setStatus(t("status.uploading", "Uploading..."));
     try {
       const res = await fetch('/api/upload?name=' + encodeURIComponent(name), {
         method: 'POST',
@@ -1075,8 +1241,9 @@ async function uploadFiles(files) {
   }
 
   // Restore status (if no other operation has changed it in the meantime)
-  if ($('status').textContent === 'Uploading...') {
-    setStatus(previousStatus || (dirty ? 'Unsaved' : ''));
+  const uploadingText = t("status.uploading", "Uploading...");
+  if ($('status').textContent === uploadingText) {
+    setStatus(previousStatus || (dirty ? t("status.unsaved", "Unsaved") : ''));
   }
 
   return markdownLines;
@@ -1211,6 +1378,86 @@ window.addEventListener("beforeunload", (e) => {
   }
 });
 
+// ---- Empire boot sequence ----
+let empireBootRunning = false;
+async function runEmpireBoot() {
+  if (empireBootRunning) return;
+  if (document.documentElement.dataset.theme === "empire") return;
+  // Check prefers-reduced-motion
+  const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  empireBootRunning = true;
+  const overlay = document.createElement("div");
+  overlay.id = "empireBoot";
+  overlay.innerHTML = '<div id="empireBootText"></div>';
+  document.body.appendChild(overlay);
+  const textEl = $("empireBootText");
+
+  const lines = [
+    { text: "Imperial protocols loading…", html: false },
+    { text: "Verifying loyalty… ", html: false },
+    { text: "<span class=\"ok\">OK</span>", html: true },
+    { text: "Order will be maintained.", html: false },
+  ];
+
+  if (prefersReduced) {
+    // Show all lines immediately
+    textEl.innerHTML = lines.map(l => l.text).join("<br>");
+    await new Promise((r) => setTimeout(r, 50));
+  } else {
+    // Type character by character, ~1.5s total
+    const totalChars = lines.reduce((sum, l) => sum + l.text.length, 0);
+    const totalTime = 1500;
+    const charDelay = totalTime / totalChars;
+    for (const line of lines) {
+      if (line.html) {
+        textEl.innerHTML += line.text;
+      } else {
+        for (const ch of line.text) {
+          textEl.innerHTML += esc(ch);
+          await new Promise((r) => setTimeout(r, charDelay));
+        }
+      }
+      textEl.innerHTML += "<br>";
+    }
+  }
+
+  // Skip on click or key
+  const skip = () => {
+    if (!empireBootRunning) return;
+    empireBootRunning = false;
+    finishBoot();
+  };
+  overlay.addEventListener("click", skip, { once: true });
+  const keyHandler = (e) => {
+    if (!empireBootRunning) return;
+    empireBootRunning = false;
+    finishBoot();
+  };
+  document.addEventListener("keydown", keyHandler, { once: true });
+
+  function finishBoot() {
+    overlay.removeEventListener("click", skip);
+    document.removeEventListener("keydown", keyHandler);
+    applyTheme("empire");
+    overlay.classList.add("fade-out");
+    setTimeout(() => overlay.remove(), 200);
+    empireBootRunning = false;
+  }
+
+  // Wait for animation to complete or skip
+  await new Promise((resolve) => {
+    const check = () => {
+      if (!empireBootRunning) {
+        resolve();
+      } else {
+        requestAnimationFrame(check);
+      }
+    };
+    check();
+  });
+}
+
 // ---- Search ----
 let st;
 $("search").addEventListener("input", () => {
@@ -1218,12 +1465,12 @@ $("search").addEventListener("input", () => {
   st = setTimeout(async () => {
     const q = $("search").value.trim();
     if (q.toLowerCase() === "for the empire") {
-      applyTheme("empire");
       $("search").value = "";
+      await runEmpireBoot();
       return;
     }
     if (editing) {
-      setStatus("Close the editor to search");
+      setStatus(t("status.closeEditorToSearch", "Close the editor to search"));
       return;
     }
     if (!q) return go(sel);
@@ -1242,10 +1489,10 @@ $("search").addEventListener("input", () => {
               })
               .join("") +
             "</div>"
-          : '<p class="muted">Nothing found</p>'),
+          : `<p class="muted">${esc(t("search.nothingFound", "Nothing found"))}</p>`),
     );
     sel = "";
-    renderCrumbs("Search");
+    renderCrumbs(t("nav.search", "Search"));
     renderNav();
     renderDetails();
     renderActions();
