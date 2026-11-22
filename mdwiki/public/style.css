@@ -178,3 +178,20 @@ aside { overflow: auto; padding: 14px 12px; }
 button.danger-solid { background: var(--danger); border-color: var(--danger); color: #fff; }
 button.danger-solid:hover:not(:disabled) { filter: brightness(1.1); background: var(--danger); }
 
+
+/* ===== Hidden "empire" theme (activated via search) ===== */
+.logo-empire { display: none; }
+[data-theme="empire"] #logo .logo-empire { display: block; width: 34px; height: 34px; }
+[data-theme="empire"] #logo svg:not(.logo-empire), [data-theme="empire"] #logo span { display: none; }
+[data-theme="empire"] {
+  --bg:#000000; --panel:#0d1014; --fg:#ffffff; --muted:#929698; --line:#3c3f41; --hover:#161c22;
+  --accent:#bc1e22; --accent-fg:#ffffff; --head:#000000; --head-text:#ffffff; --danger:#d36d6f; --code:#000000;
+  --valor:#556567;
+  --c-shelf:#929698; --c-book:#bc1e22; --c-chapter:#89a0b3; --c-page:#ffffff;
+}
+[data-theme="empire"] #top { border-bottom: 3px solid var(--accent); }
+[data-theme="empire"] a { color: var(--c-chapter); }
+[data-theme="empire"] .md-body h1, [data-theme="empire"] #view > h1.vh { text-transform: uppercase; letter-spacing: .06em; }
+[data-theme="empire"] .md-body th { background: var(--valor); color: #fff; }
+[data-theme="empire"] .md-body pre { border-left: 3px solid var(--valor); }
+

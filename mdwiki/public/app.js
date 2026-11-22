@@ -465,7 +465,7 @@ function applyTheme(t) {
   document.documentElement.dataset.theme = t;
   store.set("theme", t);
   $("themeToggle").textContent =
-    t === "dark" ? "Switch to light mode" : "Switch to dark mode";
+    t === "empire" ? "Leave the Empire" : t === "dark" ? "Switch to light mode" : "Switch to dark mode";
 }
 $("themeToggle").onclick = () =>
   applyTheme(
@@ -1217,6 +1217,11 @@ $("search").addEventListener("input", () => {
   clearTimeout(st);
   st = setTimeout(async () => {
     const q = $("search").value.trim();
+    if (q.toLowerCase() === "for the empire") {
+      applyTheme("empire");
+      $("search").value = "";
+      return;
+    }
     if (editing) {
       setStatus("Close the editor to search");
       return;
