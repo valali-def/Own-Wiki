@@ -266,10 +266,12 @@ function safeUrl(u) {
 //   - path: the hash path (e.g. "#Technik/Homelab/Docker.md") if found
 //   - label: the label to display (escaped by caller)
 function resolveWikiLink(name, label, currentPagePath) {
+  // Use globalThis.index for testability (tests populate it)
+  const idx = globalThis.index || index;
   // If name contains "/", treat as path without .md
   if (name.includes("/")) {
     const path = name.endsWith(".md") ? name : name + ".md";
-    const node = index.get(path);
+    const node = idx.get(path);
     if (node && node.type === "page") {
       return { found: true, path: "#" + encodeURIComponent(path), label: label };
     }
@@ -278,7 +280,7 @@ function resolveWikiLink(name, label, currentPagePath) {
   // Match by title (file name without .md), case-insensitive
   const lowerName = name.toLowerCase();
   let candidates = [];
-  for (const node of index.values()) {
+  for (const node of idx.values()) {
     if (node.type === "page") {
       const title = node.name; // file name without .md
       if (title.toLowerCase() === lowerName) {
@@ -291,13 +293,13 @@ function resolveWikiLink(name, label, currentPagePath) {
   }
   // Prefer page in same book as current page
   if (currentPagePath) {
-    const currentNode = index.get(currentPagePath);
+    const currentNode = idx.get(currentPagePath);
     if (currentNode) {
       // Find the book (depth 2 folder) for current page
       let currentBook = null;
       let n = currentNode;
       while (n && n.parent) {
-        const parent = index.get(n.parent);
+        const parent = idx.get(n.parent);
         if (parent && parent.depth === 2 && parent.type === "folder") {
           currentBook = parent.path;
           break;
@@ -310,7 +312,7 @@ function resolveWikiLink(name, label, currentPagePath) {
           let candBook = null;
           let m = cand;
           while (m && m.parent) {
-            const parent = index.get(m.parent);
+            const parent = idx.get(m.parent);
             if (parent && parent.depth === 2 && parent.type === "folder") {
               candBook = parent.path;
               break;
@@ -342,20 +344,22 @@ const wikiLinkExt = {
     if (match) {
       const content = match[1];
       const parts = content.split("|");
-      const name = parts[0];
-      const label = parts[1] || name;
+      const name = parts[0].trim();
+      const label = (parts[1] || name).trim();
       return { type: "wikilink", raw: match[0], name: name, label: label };
     }
   },
   renderer: (token) => {
-    // currentPagePath is the page being rendered (sel), or empty string
-    const resolved = globalThis.resolveWikiLink(token.name, token.label, sel || "");
+    // currentPagePath is the page being rendered (globalThis.sel), or empty string
+    const resolved = globalThis.resolveWikiLink(token.name, token.label, globalThis.sel || "");
     const safeName = esc(token.name);
     const safeLabel = esc(token.label);
     if (resolved.found) {
       // href is already a #anchor, pass through safeUrl for consistency
       const safeHref = esc(safeUrl(resolved.path));
-      return `<a href="${safeHref}">${safeLabel}</a>`;
+      // Add data-p with the raw path (without #) for click handling
+      const rawPath = resolved.path.startsWith("#") ? resolved.path.slice(1) : resolved.path;
+      return `<a href="${safeHref}" data-p="${esc(rawPath)}">${safeLabel}</a>`;
     } else {
       return `<span class="wikilink-missing" title="Page not found">${safeLabel}</span>`;
     }
@@ -525,8 +529,13 @@ async function go(path) {
   const n = index.get(path);
   try {
     if (!n) return showHome();
-    if (n.type === "page") return await showPage(n);
-    showFolder(n);
+    if (n.type === "page") {
+      await showPage(n);
+    } else {
+      showFolder(n);
+    }
+    // Ensure the path to the current page/folder is expanded (after sel is set)
+    if (sel) ensurePathExpanded(sel);
   } catch (e) {
     uiAlert(e.message);
   }
@@ -648,8 +657,8 @@ function toggleCollapsed(path) {
 }
 
 function ensurePathExpanded(path) {
-  const n = index.get(path);
-  if (!n || n.type !== "folder") return;
+  let n = index.get(path);
+  if (!n) return;
   let changed = false;
   while (n && n.parent) {
     if (isCollapsed(n.parent)) {
@@ -687,8 +696,6 @@ function renderNav() {
     ch.find((x) => x.type === "folder" && x.depth === 2) ||
     ch.find((x) => x.type === "folder" && x.depth === 1) ||
     null;
-  // Ensure the path to the current page is expanded
-  if (sel) ensurePathExpanded(sel);
   document.querySelector("#navSide .side-title").textContent = root
     ? root.name
     : "Shelves";
@@ -739,10 +746,22 @@ for (const id of ["view", "crumbs", "tree"])
       toggleCollapsed(toggleBtn.dataset.toggle);
       return;
     }
-    // Handle navigation clicks
+    // Handle navigation clicks on <a data-p> (wiki links, breadcrumbs, tree nodes, search results)
+    const a = e.target.closest("a[data-p]");
+    if (a) {
+      e.preventDefault();
+      go(a.dataset.p);
+      return;
+    }
+    // Handle navigation clicks on other [data-p] elements (cards, etc.)
     const c = e.target.closest("[data-p]");
     if (c) go(c.dataset.p);
   });
+// Preview area: prevent navigation on wiki links so unsaved edits are not lost
+$("preview").addEventListener("click", (e) => {
+  const a = e.target.closest("a[data-p]");
+  if (a) e.preventDefault();
+});
 $("logo").onclick = (e) => {
   e.preventDefault();
   go("");
@@ -1241,5 +1260,10 @@ async function init() {
     /* login shown by api() on 401 */
   }
 }
+// Handle browser back/forward navigation
+window.addEventListener("hashchange", () => {
+  const path = decodeURIComponent(location.hash.slice(1));
+  go(path);
+});
 api("GET", "/api/session").then(showApp).catch(showLogin);
 
