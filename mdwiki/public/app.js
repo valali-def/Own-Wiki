@@ -357,9 +357,11 @@ const wikiLinkExt = {
     if (resolved.found) {
       // href is already a #anchor, pass through safeUrl for consistency
       const safeHref = esc(safeUrl(resolved.path));
-      // Add data-p with the raw path (without #) for click handling
+      // data-p must hold the DECODED raw path (go() looks it up in the index);
+      // the encoded form stays in href for the browser
       const rawPath = resolved.path.startsWith("#") ? resolved.path.slice(1) : resolved.path;
-      return `<a href="${safeHref}" data-p="${esc(rawPath)}">${safeLabel}</a>`;
+      const decodedPath = decodeURIComponent(rawPath);
+      return `<a href="${safeHref}" data-p="${esc(decodedPath)}">${safeLabel}</a>`;
     } else {
       return `<span class="wikilink-missing" title="Page not found">${safeLabel}</span>`;
     }
@@ -529,13 +531,13 @@ async function go(path) {
   const n = index.get(path);
   try {
     if (!n) return showHome();
+    // Expand the tree to the target BEFORE rendering so the nav is correct on first paint
+    ensurePathExpanded(path);
     if (n.type === "page") {
       await showPage(n);
     } else {
       showFolder(n);
     }
-    // Ensure the path to the current page/folder is expanded (after sel is set)
-    if (sel) ensurePathExpanded(sel);
   } catch (e) {
     uiAlert(e.message);
   }
@@ -1263,6 +1265,10 @@ async function init() {
 // Handle browser back/forward navigation
 window.addEventListener("hashchange", () => {
   const path = decodeURIComponent(location.hash.slice(1));
+  // Skip when the browser set the hash to the page we are already showing,
+  // or when the hash matches what go()/chrome() just wrote via replaceState
+  if (path === sel) return;
+  if (location.hash === "#" + encodeURIComponent(sel)) return;
   go(path);
 });
 api("GET", "/api/session").then(showApp).catch(showLogin);

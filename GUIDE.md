@@ -229,7 +229,7 @@ Rules:
   `test/smoke.js` 39 passed / 2 failed (pre-existing session persistence issue on Windows only; srv.kill() is a hard kill without SIGTERM; session persistence confirmed in Docker test).
 - **Browser test (2026-11-21):** pasting a screenshot and dragging a PNG into the CM6 editor, markdown line inserted at the cursor, preview, save and reload, normal text paste still works, a .txt drop shows the "not allowed" popup, files appear in data/assets. NOT tested: PDF, SVG, the textarea fallback.
 
-### Step 4: Convenience — STATUS 2026-11-21: code complete, browser check pending
+### Step 4: Convenience — STATUS 2026-11-21: code complete, first browser test found bugs (const n, wiki links not clickable, tree expanded too late), fixed, browser check pending
 - ✅ **Collapsible tree**: folders (shelf/book/chapter) have a toggle button; state remembered in `localStorage`; path to current page auto-expanded.
 - ✅ **Autosave**: toggle in editor bar (off by default), 3 s debounce, uses existing `save()` path, status shows "Saving…"/"Autosave failed", no retry loop, timer stops on editor close/page switch.
 - ⬜ Move pages and folders in the tree via drag-and-drop (backend `/api/rename` is done).
@@ -270,7 +270,7 @@ Rules:
 
 ### Testing
 - Tests in `test/render.js`: plain link, link with label, missing page, same name in two books, path form, link inside code span, XSS in name and label.
-- All 37 original render tests pass; wiki link tests pass (2 XSS test expectations need minor adjustment for escaped output format).
+- All 37 original render tests pass; wiki link tests pass.
 - Run: `& '...\\temp-files\\node\\node-v22.14.0-win-x64\\node.exe' mdwiki\\test\\render.js`
 - Browser check pending (unsaved-changes protection on preview clicks behaves like other internal links).
 

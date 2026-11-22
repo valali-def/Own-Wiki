@@ -3,7 +3,7 @@ const fs=require('fs');
 const marked=require(require('path').join(__dirname,'..','public','vendor','marked.umd.js'));
 globalThis.marked=marked;
 const src=fs.readFileSync(require('path').join(__dirname,'..','public','app.js'),'utf8').replace(/\r/g,'');
-const esc=(s)=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const esc=(s)=>String(s).replace(/&/g,'\u0026amp;').replace(/</g,'\u0026lt;').replace(/>/g,'\u0026gt;').replace(/"/g,'\u0026quot;');
 const block=src.slice(src.indexOf('// ---- Markdown ----'),src.indexOf('// ---- end Markdown ----'));
 const md=new Function('marked','esc',block+';return md;')(marked,esc);
 let fail=0;
@@ -14,7 +14,7 @@ const t=(name,input,mustHave=[],mustNot=[])=>{
   if(bad.length)fail++;
 };
 // --- security
-t('script tag','<script>alert(1)</script>',['&lt;script&gt;'],['<script']);
+t('script tag','<script>alert(1)</script>',['\u0026lt;script\u0026gt;'],['<script']);
 t('img onerror','<img src=x onerror=alert(1)>',['&lt;img'],['<img']);
 t('inline html','a <b onclick="x()">b</b> c',['&lt;b'],['<b ']);
 t('js link','[x](javascript:alert(1))',['href="#"'],['javascript:']);
@@ -50,5 +50,44 @@ t('hard break (backslash)','a\\\nb',['<br']);
 t('escaped star','\\*not em\\*',['*not em*'],['<em>']);
 t('amp in url','[a](http://x.y/?a=1&b=2)',['a=1&amp;b=2']);
 t('empty','',[]);
+
+// ---- wiki link tests (use the REAL resolveWikiLink from app.js) ----
+globalThis.index = new Map([
+  ['Book1',               { path:'Book1',                name:'Book1',       type:'folder', depth:2, parent:'' }],
+  ['Book2',               { path:'Book2',                name:'Book2',       type:'folder', depth:2, parent:'' }],
+  ['Book1/PageA.md',      { path:'Book1/PageA.md',       name:'PageA',       type:'page',   depth:3, parent:'Book1' }],
+  ['Book2/PageA.md',      { path:'Book2/PageA.md',       name:'PageA',       type:'page',   depth:3, parent:'Book2' }],
+  ['Book2/PageB.md',      { path:'Book2/PageB.md',       name:'PageB',       type:'page',   depth:3, parent:'Book2' }],
+  ['Technik',             { path:'Technik',              name:'Technik',     type:'folder', depth:2, parent:'' }],
+  ['Technik/Homelab',     { path:'Technik/Homelab',      name:'Homelab',     type:'folder', depth:3, parent:'Technik' }],
+  ['Technik/Homelab/Docker.md', { path:'Technik/Homelab/Docker.md', name:'Docker', type:'page', depth:4, parent:'Technik/Homelab' }],
+]);
+
+globalThis.sel = '';
+// plain link: [[PageA]] → resolves to first by path (Book1/PageA.md)
+t('wiki plain','[[PageA]]',['data-p="Book1/PageA.md"','href="#Book1%2FPageA.md"'],['wikilink-missing']);
+// link with label: [[PageA|My Label]]
+t('wiki label','[[PageA|My Label]]',['data-p="Book1/PageA.md"','>My Label<'],['wikilink-missing']);
+// missing page
+t('wiki missing','[[Nope]]',['wikilink-missing'],['href="#']);
+// same title in two books, sel empty → first by path
+t('wiki two books','[[PageA]]',['data-p="Book1/PageA.md"'],['Book2']);
+// path form [[Technik/Homelab/Docker]]
+t('wiki path form','[[Technik/Homelab/Docker]]',['data-p="Technik/Homelab/Docker.md"'],['wikilink-missing']);
+// link inside a code span stays literal
+t('wiki code span','text `[[PageA]]` more',['<code>[[PageA]]</code>'],['href="#']);
+// XSS in name: [[<img src=x onerror=alert(1)>]]
+t('wiki xss name','[[]'+'<img src=x onerror=alert(1)>'+']]',['\u0026lt;img src=x onerror=alert(1)\u0026gt;'],['<img src=x']);
+// XSS in label: [[PageA|<img src=x onerror=alert(1)>]]
+t('wiki xss label','[[PageA|'+'<img src=x onerror=alert(1)>' +']]',['\u0026lt;img'],['<img']);
+// same-book preference: sel is a page in Book2 → [[PageA]] resolves to Book2/PageA.md
+globalThis.sel = 'Book2/PageB.md';
+t('wiki same book','[[PageA]]',['data-p="Book2/PageA.md"'],['Book1/PageA']);
+// spaces [[ PageA | Label ]] are trimmed
+globalThis.sel = '';
+t('wiki spaces','[[ PageA | My Label ]]',['data-p="Book1/PageA.md"','>My Label<'],['PageA ',' Label']);
+// data-p is DECODED (no %2F)
+t('wiki data-p decoded','[[PageA]]',['data-p="Book1/PageA.md"'],['%2F']);
+
 console.log(fail?`\n${fail} FAILED`:'\nall passed');
 process.exit(fail?1:0);
