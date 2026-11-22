@@ -1,19 +1,22 @@
 # GUIDE: Status and next steps
 
 This document is for anyone who continues building the project (including a new Claude session).
-Just upload this project and say: "Continue with Step 4 in GUIDE.md."
+Just upload this project and say: "Continue with Step 6 in GUIDE.md." The core wiki is finished and runs on the
+home server; Step 6 and the open list below it only contain optional extras.
 
-## CURRENT STATE — updated 2026-11-21 (Step 5 done)
+## CURRENT STATE — updated 2026-11-22 (Steps 1–5 done; Step 4 done except drag-and-drop move)
 
 Everything below the old sections is unchanged; this section is the up-to-date picture on top of it.
 
 ### Where things live
 - `mdwiki/` is the real project (`server.js`, `public/`, `test/`, `Dockerfile`, `docker-compose.yml`).
-- `temp-files/` is scratch only (not part of the app): it currently holds a portable Node.js v22.14.0
+- `temp-files/` is scratch only (not part of the app, ignored by git): it currently holds a portable Node.js v22.14.0
   (`temp-files/node/node-v22.14.0-win-x64/node.exe`, zip next to it) plus test logs. Node is NOT installed
-  on this Windows machine and not on PATH — run tests with that binary, e.g.
+  on the Windows development machine and not on PATH — run tests with that binary, e.g.
   `& '...\temp-files\node\node-v22.14.0-win-x64\node.exe' mdwiki\test\render.js`
-- The `demo/` folder is still missing from this repository (see the open note in Step 1).
+- `GUIDE.md` and `README.md` exist only in the repo root. There is no copy in `mdwiki/`; do not create one.
+- There is no offline demo (`demo/`) in this repository and none is planned. Test the frontend against the real
+  server (see "Running locally" and "First test on the server").
 
 ### What was ADDED in the 2026-11-21 session (Step 2: CodeMirror 6 editor; Step 3: Image upload; Step 5: Download backup button)
 - **`mdwiki/tools/fetch-cm6.mjs`** (new): downloads CodeMirror 6 and all dependencies as ES modules from
@@ -30,7 +33,8 @@ Everything below the old sections is unchanged; this section is the up-to-date p
 - **`mdwiki/public/cm-editor.js`** (new): the glue module. Exports
   `createEditor(host, { value, onUpdate, onCommand })` → `{ view, getValue, setValue, focus, setDisabled }`.
   Inside: Markdown language (`markdown({ base: markdownLanguage })`), a `HighlightStyle` that uses only the
-  CSS variables from `style.css` (so light/dark both work), `bracketMatching()`, `history()`,
+  CSS variables from `style.css` (so light/dark both work; headings use `--head-text`, NOT `--head`, which is the
+  background colour of the top bar), `bracketMatching()`, `history()`,
   `EditorView.lineWrapping`, `highlightActiveLine()`, an editable `Compartment`, and a keymap routing
   **Mod-b / Mod-i / Mod-k / Mod-s** to `onCommand(name, view)` (return `true` = handled) plus `indentWithTab`.
 - **`mdwiki/public/index.html`** (changed): added `<div id="cmHost" hidden></div>` inside `#panes`,
@@ -53,6 +57,20 @@ Everything below the old sections is unchanged; this section is the up-to-date p
 - **`mdwiki/public/style.css`** (changed): styles for `#cmHost` and `.cm-*` using only CSS variables (light/dark, square corners).
 - **`mdwiki/test/cm6-vendor.js`** (new): verifies no external CDN references in vendor imports,
   and that `cm-editor.js` exports `createEditor` function in Node.
+- **`mdwiki/test/app-lint.js`** (new): fails if `app.js` contains `$("#...")` (in `app.js` `$` is
+  `getElementById`, so a `#` never finds the element).
+
+### What was ADDED for Step 4 (2026-11-21/22)
+- **Collapsible tree** (`app.js`): `collapsedFolders` (list of paths, kept in `localStorage`), `toggleCollapsed()`,
+  `ensurePathExpanded(path)`, toggle `<button data-toggle>` with the `#i-chevron` icon. `ensurePathExpanded()` is
+  called in `go()` BEFORE `showPage()`/`showFolder()`, not in `renderNav()`: otherwise the tree would be drawn
+  before it is expanded, and the user could not collapse the folder that contains the current page.
+- **Autosave** (`app.js`): toggle `#autosaveToggle` in the editor bar, off by default, remembered in `localStorage`,
+  3 s debounce, goes through `save({ autosave: true })`. Reason for "off by default": there is no version history.
+- **Page links** (`app.js`): `wikiLinkExt` (marked inline extension) and `resolveWikiLink()`; see "Wiki Link Syntax".
+- **Browser back/forward**: a `hashchange` listener calls `go()` unless the page is already shown.
+- Lesson from the first browser test: a `const` that is reassigned (`ensurePathExpanded()`) is a runtime error that no
+  Node test catches. Test every frontend change in a real browser.
 
 ### Step 2 checklist — current state
 - DONE: CM6 vendored (`public/vendor/cm6/`), `tools/fetch-cm6.mjs`, `public/cm-editor.js`, `#cmHost` in `index.html`.
@@ -67,18 +85,23 @@ Everything below the old sections is unchanged; this section is the up-to-date p
   - empty selection: inserts prefix+suffix and puts cursor between them
   - link: inserts `[selected](url)` and selects "url" (empty: `[](url)` with "url" selected)
   - CM6 uses `state.changeByRange` for correct multi-range handling
-- DONE: All tests pass (`test/render.js` 37/37, `test/cm6-vendor.js`, `test/app-lint.js`); `test/smoke.js` has 2 pre-existing session persistence failures on Windows only (srv.kill() is a hard kill without SIGTERM); session persistence confirmed in Docker test.
-- Steps 4–6 are untouched (see below). The missing `demo/` folder blocks the demo-related
-  bullets in Step 1 and Step 3 until it is recreated (`demo/build.js`, `demo/mock-api.js`, `demo/wiki-demo.html`).
+- FIXED (2026-11-22): headings in the editor were almost invisible in the dark theme; they now use `--head-text`.
+- DONE: all Node tests pass (`test/render.js`, `test/cm6-vendor.js`, `test/app-lint.js`); `test/smoke.js` has exactly
+  2 failures on Windows only (see below).
 
 ### Test/verification status right now
-- `node test/render.js` (Markdown renderer + XSS): **all passed** (37 checks) — run 2026-11-21
-- `node test/cm6-vendor.js` (CM6 vendor imports): **all passed** — run 2026-11-21
-- `node test/app-lint.js` (app.js lint for `$("#...")`): **all passed** — run 2026-11-21
-- `node test/smoke.js` (server API + security): **39 passed, 2 failed** (pre-existing session persistence issue on Windows only; srv.kill() is a hard kill without SIGTERM; session persistence confirmed in Docker test) — run 2026-11-21
-- CM6 vendor graph: import + syntax verified in Node 22. Exercised in browser on server.
-- All browser tests passed (dialogs, search, rename/move/delete, theme switch, editor, image upload). Mobile layout is read-only on purpose.
-- **Step 5 (this session):** "Download backup" button added to `#acctMenu`; all 4 tests still pass (same 39/2 smoke.js result). Browser test passed 2026-11-21.
+- `node test/render.js` (Markdown renderer, XSS, wiki links; it runs the real `resolveWikiLink` with a test index): **all passed**.
+- `node test/cm6-vendor.js` (CM6 vendor imports): **all passed**.
+- `node test/app-lint.js` (app.js lint for `$("#...")`): **all passed**.
+- `node test/smoke.js` (server API + security): **39 passed, 2 failed on Windows**. Both failures are in the section
+  "Sessions + restart": the test stops the server with `srv.kill()`, which is a hard kill on Windows (no SIGTERM,
+  so the graceful shutdown that writes `.sessions.json` never runs). Expected on Windows, ignore them. Session
+  persistence was confirmed in the Docker test (`docker compose restart` keeps you logged in).
+- Browser tests on the home server (Docker), 2026-11-21 and 2026-11-22: login, create shelf/book/page, editor with
+  live preview, Ctrl+S, dialogs, search, rename/move/delete, theme switch, image paste and drag-and-drop,
+  Download backup, collapsible tree, autosave, `[[links]]` (click, back/forward), unsaved-changes prompt.
+  Mobile layout is read-only on purpose.
+- A nightly cron backup of `data/` runs on the home server (see Step 5).
 
 ## Goal
 
@@ -93,13 +116,16 @@ files on disk. Access only on the home network and via Tailscale, so no HTTPS of
   - Create, rename/move and delete folders
   - Tree (`GET /api/tree`), full-text search (`GET /api/search?q=`, simple file scan, enough for private amounts of data)
   - Image upload (`POST /api/upload?name=x.png`, raw data in the body) to `data/assets/`, served at `/files/assets/...`
+  - Backup export (`GET /api/export`): the data folder as `.tar.gz`, without `.sessions.json`
   - Protection against path tricks (`..`, dotfiles), `.md` pages only, uploads only for certain image types and PDF
 - **Docker**: `Dockerfile` and `docker-compose.yml` (volume `./data:/data`, ports `192.168.1.100:3100:3000` and `100.100.53.111:3100:3000`, password from `.env`).
 - **Frontend (`public/`)**:
-  - Login, top bar with search and the views Shelves / Books / Chapters, account menu (theme switch, log out)
-  - Shelves → Books → Chapters → Pages structure, breadcrumbs, side navigation, "Details" and "Actions" panels, cards
-  - Editor with two modes, "Markdown" and "Markdown + Preview" (the choice is remembered), save with Ctrl+S, unsaved-changes warning
+  - Login, top bar with search and the views Shelves / Books / Chapters, account menu (theme switch, Download backup, log out)
+  - Shelves → Books → Chapters → Pages structure, breadcrumbs, side navigation with collapsible folders, "Details" and "Actions" panels, cards
+  - Editor (CodeMirror 6, textarea as fallback) with two modes, "Markdown" and "Markdown + Preview" (the choice is remembered), save with Ctrl+S, optional autosave, unsaved-changes warning
+  - Images and PDFs via paste and drag-and-drop into the editor
   - New page / new folder / rename or move / delete, full-text search
+  - Links between pages with `[[Page name]]`
   - **Markdown renderer = `marked`** (GFM), served locally from `public/vendor/marked.umd.js` (works offline). `md()` in `app.js` is a thin wrapper:
     raw HTML in the text is **escaped, not rendered**, and link/image addresses must pass `safeUrl()` (only http, https, mailto, tel, relative paths, `#anchors`).
     If the library fails to load, the page shows the plain text instead of breaking. Tested with `node test/render.js` (features + XSS attempts).
@@ -107,18 +133,13 @@ files on disk. Access only on the home network and via Tailscale, so no HTTPS of
   - The current page is kept in the URL hash (`#Technik/Homelab/Docker.md`), so reloading returns to it
   - **Square design**: no rounded corners anywhere, colors unchanged (see "UI conventions")
   - **Own dialogs** instead of the browser's pop-ups for new page/folder, rename, delete and error messages (see "UI conventions")
-- **Demo**: `demo/wiki-demo.html` runs the whole interface without a server (see "Testing the design without a server").
 
 ## What is NOT tested
 
-- The frontend **has now been run once in headless Chromium** against the real server: login (wrong and right password), opening a page from the URL hash,
-  rendering, editor with live preview, Ctrl+S, reload. No JavaScript errors, no native pop-ups, XSS attempts stayed text.
-- **Step 2 browser test (2026-11-21):** CM6 editor loads, syntax highlighting works in light and dark, live preview, Ctrl+S, Markdown functions.
-  **NOT confirmed in a browser yet:** Ctrl+B/I/K and the textarea fallback.
-- **Step 3 browser test (2026-11-21):** confirmed = pasting a screenshot and dragging a PNG into the CM6 editor, markdown line inserted at the cursor, preview, save and reload, normal text paste still works, a .txt drop shows the "not allowed" popup, files appear in data/assets. **NOT tested:** PDF, SVG, the textarea fallback.
-- The **Docker image was built and tested on the home server (2026-11-21): login, create shelf/book/page, editor, restart keeps sessions and data, image paste and drag-and-drop.** The container runs as user `node` (UID 1000); the data folder must be writable by UID 1000 (`sudo chown 1000:1000 data`). Password is read from `.env` (copy `.env.example` to `.env` and `chmod 600 .env`). Ports are bound to specific interfaces (see docker-compose.yml), not all interfaces.
-- There was no network during development, so no library was deliberately installed.
-- Not covered by the demo: image upload (`/api/upload`), the login brake and real sessions.
+- **Ctrl+B / Ctrl+I / Ctrl+K** in the CM6 editor and the **textarea fallback** (when `cm-editor.js` fails to load) have not been confirmed in a browser yet.
+- Uploading **PDF** and **SVG** files has not been tested in a browser.
+- The login brake and real sessions are covered by `test/smoke.js` and the Docker test, not by an automatic browser test.
+- The **Docker image was built and tested on the home server (2026-11-21)**: login, create shelf/book/page, editor, restart keeps sessions and data, image paste and drag-and-drop, backup button. The container runs as user `node` (UID 1000); the data folder must be writable by UID 1000 (`sudo chown 1000:1000 data`). Password is read from `.env` (copy `.env.example` to `.env` and `chmod 600 .env`). Ports are bound to specific interfaces (see docker-compose.yml), not all interfaces.
 
 ## UI conventions (read this before touching the frontend)
 
@@ -139,6 +160,7 @@ This is computed in `buildIndex()` in `app.js`. Each type has its own color (`--
 
 All colors are CSS variables at the top of `style.css`: one block for light (`:root`), one for dark (`[data-theme="dark"]`).
 Use the variables, never hard-coded colors, so both themes keep working. The accent color is `--accent`, danger is `--danger`.
+`--head` is the background of the top bar (a dark navy in the dark theme), it is NOT a text color; use `--head-text` for text.
 
 ### Square design
 
@@ -169,19 +191,19 @@ Rules:
 - The text is inserted as plain text, never as HTML.
 - The only native pop-up that remains is the browser's "leave this page?" warning (`beforeunload`). Browsers do not allow replacing it.
 
-## Testing the design without a server
+## Running locally (without Docker)
 
-`demo/wiki-demo.html` is a single file with the real interface inside. Open it by double-clicking.
+Run from `mdwiki/`. Node is not on PATH on the Windows machine, use the portable one (see "Where things live").
+In PowerShell:
 
-- **Password:** anything except an empty field.
-- **Data:** sample shelves, books, chapters and pages (including an empty page, a page directly in a shelf, and an empty shelf `Archiv`),
-  with every supported Markdown element. All kept in memory, **reset on reload**.
-- **How it works:** `demo/mock-api.js` replaces `fetch()` for all `/api/...` addresses and answers from an in-memory object.
-  The files in `public/` are used unchanged.
-- **Rebuild after every frontend change:** `node demo/build.js` (reads `public/index.html`, `style.css`, `app.js` and `demo/mock-api.js`
-  and writes `demo/wiki-demo.html`).
-- **Keep it in sync:** if you add or change an endpoint in `server.js`, make the same change in `demo/mock-api.js`, otherwise the demo shows errors.
-- Never put the demo or `mock-api.js` into the Docker image. It has no real login.
+```powershell
+$env:APP_PASSWORD = "test"
+$env:DATA_DIR = ".\data"
+& '...\temp-files\node\node-v22.14.0-win-x64\node.exe' server.js
+```
+
+The console prints `mdwiki running on port ...`; open that address in the browser (`http://localhost:<port>`).
+`data/` is ignored by git.
 
 ## First test on the server (10 minutes)
 
@@ -192,7 +214,16 @@ Rules:
 5. Try rename/move and delete: the own dialogs must appear, not the browser's.
 6. Restart the container (`docker compose restart`): pages must still be there and you stay logged in (sessions are stored in `data/.sessions.json`).
 
-## Next steps (in this order)
+## Operating the server
+
+- **Update after code changes:** `git pull` in the clone of the repo on the server, then `docker compose up -d --build` in
+  `mdwiki/`. A plain `docker compose restart` is NOT enough, because `public/` is baked into the image. Data and sessions
+  survive a rebuild. After the update press Ctrl+F5 in the browser (cached JS/CSS).
+- **Refresh the base image** (security updates of `node:22-alpine`) from time to time: `docker compose build --pull`, then `docker compose up -d`.
+- **Backups:** the "Download backup" button in the account menu, plus a nightly cron job on the server (see Step 5).
+  The backup script is NOT part of the repo.
+
+## Next steps
 
 ### Step 1: Markdown renderer. DONE (option B, without DOMPurify)
 - Switched to **marked** 18.0.10, served locally (`public/vendor/marked.umd.js`, licence next to it). Only `md()` changed.
@@ -200,9 +231,8 @@ Rules:
 - Now supported: nested blockquotes and code in lists, autolinks, hard line breaks, escaped characters, table alignment, `_underscore_` emphasis.
 - Not supported (marked has no footnotes): footnotes. They are in Step 6 as an optional extra (needs a marked extension).
 - If you change `md()`: run `node test/render.js` and keep the "escape first" rule.
-- The demo build (`demo/build.js`) must now also include `public/vendor/marked.umd.js` before `app.js`. **The `demo/` folder was missing from the uploaded zip, so this is not done.**
 
-### Step 2: Better editor — STATUS 2026-11-21: code complete, browser tests passed
+### Step 2: Better editor — STATUS 2026-11-22: DONE, browser tested (except Ctrl+B/I/K and the textarea fallback)
 - **Completed:** CodeMirror 6 vendored offline in `public/vendor/cm6/` (via `tools/fetch-cm6.mjs`),
   editor glue module `public/cm-editor.js`, `#cmHost` container added to `index.html`.
 - **Wired in `app.js`:** lazy `import()` with textarea fallback, editor helpers (`editorValue()`, `setEditorValue()`,
@@ -210,11 +240,10 @@ Rules:
   Ctrl+S de-dup guard (`e.defaultPrevented`), show `#cmHost`/hide `#editor` when CM6 active.
 - **Styles in `style.css`:** `#cmHost` and `.cm-*` using CSS variables (light/dark, square corners).
 - **Test:** `test/cm6-vendor.js` verifies no external CDN references and `createEditor` export.
-- Replace the `<textarea>` with **CodeMirror 6** (Markdown syntax colors, indentation, brackets).
-- Keyboard shortcuts: Ctrl+B for bold, Ctrl+I for italic, Ctrl+K for link.
-- **Browser test (2026-11-21):** CM6 editor loads, syntax highlighting works, shortcuts work, live preview updates, Ctrl+S saves, fallback to textarea works.
+- **Browser test (2026-11-21/22):** CM6 editor loads, syntax highlighting works in light and dark, live preview updates, Ctrl+S saves,
+  Markdown functions work. **Not confirmed yet in a browser:** Ctrl+B/I/K and the textarea fallback.
 
-### Step 3: Images via drag-and-drop and paste — STATUS 2026-11-21: code complete, browser tests passed
+### Step 3: Images via drag-and-drop and paste — STATUS 2026-11-21: DONE, browser tested (PNG)
 - **Completed in `app.js`:** `uploadFiles(files)` validates allowed types (png, jpg, jpeg, gif, webp, svg, pdf),
   generates names for pasted screenshots (`pasted-YYYYMMDD-HHMMSS.png`), POSTs to `/api/upload`,
   shows "Uploading..." status, handles errors via `uiAlert`, returns markdown lines.
@@ -224,28 +253,29 @@ Rules:
 - **Events:** `paste` / `drop` / `dragover` on `#cmHost` and `#editor`. Only act when files are present;
   normal text paste/drop passes through. `preventDefault()` only for file events. Listeners registered
   ONCE via `registerEditorFileEvents()` in `showApp()`; survive CM6 destroy/create cycles.
-- **Demo:** `/api/upload` not yet added to `demo/mock-api.js` (demo folder missing from repo).
-- **Tests:** `test/app-lint.js` OK, `test/render.js` 37/37 OK, `test/cm6-vendor.js` OK,
-  `test/smoke.js` 39 passed / 2 failed (pre-existing session persistence issue on Windows only; srv.kill() is a hard kill without SIGTERM; session persistence confirmed in Docker test).
 - **Browser test (2026-11-21):** pasting a screenshot and dragging a PNG into the CM6 editor, markdown line inserted at the cursor, preview, save and reload, normal text paste still works, a .txt drop shows the "not allowed" popup, files appear in data/assets. NOT tested: PDF, SVG, the textarea fallback.
 
-### Step 4: Convenience — STATUS 2026-11-21: code complete, first browser test found bugs (const n, wiki links not clickable, tree expanded too late), fixed, browser check pending
-- ✅ **Collapsible tree**: folders (shelf/book/chapter) have a toggle button; state remembered in `localStorage`; path to current page auto-expanded.
+### Step 4: Convenience — STATUS 2026-11-22: DONE except drag-and-drop move; browser tested on the server
+- ✅ **Collapsible tree**: folders (shelf/book/chapter) have a toggle button; state remembered in `localStorage`; the path to the opened page is expanded automatically.
 - ✅ **Autosave**: toggle in editor bar (off by default), 3 s debounce, uses existing `save()` path, status shows "Saving…"/"Autosave failed", no retry loop, timer stops on editor close/page switch.
-- ⬜ Move pages and folders in the tree via drag-and-drop (backend `/api/rename` is done).
+- ⬜ Move pages and folders in the tree via drag-and-drop (optional; moving already works with the rename/move dialog, backend `/api/rename` is done).
 - ✅ **Links between pages** (`[[PageName]]` and `[[PageName|Label]]`) — implemented as marked inline extension, resolving against page index, XSS-safe.
+- ✅ **Browser back/forward** works through a `hashchange` listener.
 - Already done: current page in the URL hash, dark/light toggle.
 
 ### Step 5: Export and backup — STATUS 2026-11-21: DONE, browser tested 2026-11-21
-- **Completed:** "Download backup" button in the account menu (`#acctMenu`), fetches `GET /api/export`, shows `uiAlert` on error (e.g. 404 "Nothing to export yet"), downloads `.tar.gz` via temporary `<a download="mdwiki-YYYY-MM-DD.tar.gz">` with local date, closes menu, shows `setStatus("Preparing backup...")` during operation. The button downloads a `.tar.gz` with pages and assets and without `.sessions.json` (checked by the user).
+- **Completed:** "Download backup" button in the account menu (`#acctMenu`), fetches `GET /api/export`, shows `uiAlert` with the server's error text on error (e.g. 404 "Nothing to export yet"), downloads `.tar.gz` via temporary `<a download="mdwiki-YYYY-MM-DD.tar.gz">` with local date, closes menu, shows `setStatus("Preparing backup...")` during operation and restores the previous status afterwards. The button downloads a `.tar.gz` with pages and assets and without `.sessions.json` (checked by the user).
 - Endpoint `GET /api/export` delivers the data folder as `.tar.gz` (using `tar czf - -C` in Alpine via `child_process`), covered by `test/smoke.js`.
 - On the home server an automatic daily backup (03:00, kept 14 days) runs via cron; this script is NOT part of the repo.
 - Optional: keep `data/` as a Git repo for a version history.
 
-### Step 6: Optional extras
+### Step 6: Optional extras (nothing here is required)
 - Footnotes, math (KaTeX), Mermaid diagrams in the preview.
+- Drag-and-drop move in the tree (see Step 4).
 - (Persistent sessions are already done, see `.sessions.json` and the graceful shutdown in `server.js`.)
 - HTTPS via `tailscale serve`, then set `COOKIE_SECURE=true`.
+- Version history: make `data/` a Git repo (e.g. commit nightly).
+- Confirm the open browser tests from "What is NOT tested".
 
 ---
 
@@ -255,12 +285,19 @@ Rules:
 - `[[Page name]]` — link with the page title as label
 - `[[Page name|Custom label]]` — link with custom label
 - `[[path/to/page]]` — link using path (without `.md` extension)
+- Spaces around the name and the label are trimmed.
 
 ### Resolving Rules
 1. **Path form** (`[[path/to/page]]`): treated as a path without `.md`, looked up directly in the index.
 2. **Title form** (`[[Page name]]`): matched against page titles (file name without `.md`), case-insensitive.
 3. **Multiple matches**: if several pages have the same title, prefer the one in the same book (depth-2 folder) as the current page; otherwise the first by path order.
 4. **Not found**: renders as `<span class="wikilink-missing" title="Page not found">` (muted, dashed underline, not clickable).
+
+### Clicking
+- A found link is rendered as `<a href="#ENCODED/PATH" data-p="RAW/PATH.md">`. The click handler on `#view`, `#crumbs` and `#tree`
+  calls `preventDefault()` and `go(data-p)`; `go()` also handles the unsaved-changes prompt. `href` stays encoded so that
+  "open in new tab" works. **`data-p` must hold the DECODED path** (the index is keyed by the raw path).
+- In the editor preview (`#preview`) these links do nothing, so unsaved edits cannot be lost.
 
 ### Security
 - Page name and label are HTML-escaped before rendering.
@@ -269,10 +306,17 @@ Rules:
 - Code spans and code blocks are NOT processed for wiki links (` `[[code]]` ` stays literal).
 
 ### Testing
-- Tests in `test/render.js`: plain link, link with label, missing page, same name in two books, path form, link inside code span, XSS in name and label.
-- All 37 original render tests pass; all 46 tests in test/render.js pass, including the 11 wiki link tests ("all passed", exit code 0).
-- Run: `& '...\\temp-files\\node\\node-v22.14.0-win-x64\\node.exe' mdwiki\\test\\render.js`
-- Browser check pending (unsaved-changes protection on preview clicks behaves like other internal links).
+- `test/render.js` contains the wiki link tests: plain link, link with label, missing page, same name in two books, path form,
+  link inside a code span, XSS in name and label, same-book preference, trimmed spaces, decoded `data-p`.
+  The test sets `globalThis.index` (a Map of nodes) and `globalThis.sel` and uses the REAL `resolveWikiLink` from `app.js`.
+- Run: `& '...\temp-files\node\node-v22.14.0-win-x64\node.exe' mdwiki\test\render.js`
+- Browser tested 2026-11-22: click opens the page in the same tab, back/forward works, links in the preview are inert.
+
+### Rules for tests and AI helpers
+- In test strings write HTML entities as unicode escapes (e.g. `'\u0026lt;img'` for `&lt;img`). Some AI file tools convert entities
+  into plain characters and silently corrupt `test/render.js` (the `esc()` helper and the security tests).
+- Do not leave throwaway scripts (`fix_*.js`, `test_extension*.js`) in the repo. Use `temp-files/scratch/` and delete them afterwards.
+- Do not claim tests that were not run.
 
 ## Important design decisions (please keep)
 
@@ -284,8 +328,8 @@ Rules:
 - **Never display Markdown as unfiltered HTML.** Raw HTML is escaped in the `html` renderer of `md()` and URLs go through `safeUrl()`, even if only I write.
 - **Shelf/Book/Chapter come from folder depth**, not from extra files or a database.
 - **Square design and own dialogs** (see "UI conventions"): no `border-radius`, no `prompt`/`confirm`/`alert`.
-- **Keep the demo in sync** with the frontend and the API.
 - **Mobile layout is read-only on purpose (checked by the user).** Editing is only meant for the desktop layout (on a phone, switch the browser to desktop view). Do not 'fix' this.
+- **Autosave stays off by default** (no version history; an accidental deletion would be saved after 3 seconds).
 
 ## API quick reference
 
@@ -302,4 +346,5 @@ Rules:
 | DELETE | `/api/item?path=` | Delete page or folder |
 | GET | `/api/search?q=` | Full-text search |
 | POST | `/api/upload?name=x.png` | Upload image (raw data in the body) |
+| GET | `/api/export` | Backup: data folder as `.tar.gz` (without `.sessions.json`) |
 | GET | `/files/assets/x.png` | Serve file (never `.md`) |
