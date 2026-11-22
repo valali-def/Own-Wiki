@@ -59,9 +59,13 @@ const ICON = {
 };
 const LABEL = {
   shelf: "Shelf",
+  shelfPlural: "Shelves",
   book: "Book",
+  bookPlural: "Books",
   chapter: "Chapter",
+  chapterPlural: "Chapters",
   page: "Page",
+  pagePlural: "Pages",
 };
 // Empire theme translations
 const EMPIRE_TEXT = {
@@ -102,7 +106,6 @@ const EMPIRE_TEXT = {
   // Actions
   "act.edit": "Revise",
   "act.newPage": "New dossier",
-  "act.newFolder": "New folder",
   "act.rename": "Reassign",
   "act.delete": "Eliminate",
   // View
@@ -144,17 +147,11 @@ const EMPIRE_TEXT = {
   // Wiki link missing
   "wikilink.missing": "Dossier not found",
 };
-// Returns empire text if theme is empire, otherwise default
-function t(key, defaultText) {
-  if (typeof document !== "undefined" && document.documentElement?.dataset?.theme === "empire" && EMPIRE_TEXT[key]) {
-    return EMPIRE_TEXT[key];
-  }
-  return defaultText;
-}
 // Helper to get plural level name
 function levelName(kind, plural = false) {
   const key = plural ? `level.${kind}.plural` : `level.${kind}`;
-  return t(key, LABEL[kind] + (plural && !kind.endsWith("s") ? "s" : ""));
+  const defaultLabel = plural ? LABEL[`${kind}Plural`] : LABEL[kind];
+  return t(key, defaultLabel);
 }
 const ico = (k) => `<svg><use href="#${ICON[k]}"/></svg>`;
 const store = {
@@ -568,11 +565,11 @@ document.addEventListener("click", () => {
 });
 // Store for original texts to restore when leaving empire
 const originalTexts = new Map();
-function applyTheme(t) {
-  const wasEmpire = document.documentElement.dataset.theme === "empire";
-  const becomingEmpire = t === "empire";
+let staticTranslated = false;
+function applyTheme(theme) {
+  const isEmpire = theme === "empire";
 
-  if (wasEmpire && !becomingEmpire) {
+  if (!isEmpire && staticTranslated) {
     // Leaving empire: restore original texts
     for (const [el, data] of originalTexts) {
       if (data.attr === "textContent") {
@@ -584,7 +581,8 @@ function applyTheme(t) {
       }
     }
     originalTexts.clear();
-  } else if (becomingEmpire && !wasEmpire) {
+    staticTranslated = false;
+  } else if (isEmpire && !staticTranslated) {
     // Entering empire: store originals and apply translations
     document.querySelectorAll("[data-t]").forEach((el) => {
       const key = el.dataset.t;
@@ -601,26 +599,19 @@ function applyTheme(t) {
         }
       }
     });
+    staticTranslated = true;
   }
 
-  document.documentElement.dataset.theme = t;
-  store.set("theme", t);
+  document.documentElement.dataset.theme = theme;
+  store.set("theme", theme);
   $("themeToggle").textContent =
-    t === "empire" ? "Leave the Empire" : t === "dark" ? "Switch to light mode" : "Switch to dark mode";
+    theme === "empire" ? "Leave the Empire" : theme === "dark" ? "Switch to light mode" : "Switch to dark mode";
 
   // Re-render dynamic UI parts that use t()
-  if (becomingEmpire || wasEmpire) {
-    renderNav();
-    renderDetails();
-    renderActions();
-    renderCrumbs();
-    // Update status if showing a status message
-    const statusEl = $("status");
-    if (statusEl.textContent) {
-      // Status messages are set via setStatus() which uses t()
-      // They will update on next render or action
-    }
-  }
+  renderNav();
+  renderDetails();
+  renderActions();
+  renderCrumbs();
 }
 $("themeToggle").onclick = () =>
   applyTheme(
@@ -900,8 +891,8 @@ function renderActions() {
   const kind = kinds[d] || "folder";
   // Store kind in data attribute to avoid reading textContent
   $("newFolder").dataset.kind = kind;
-  // Use t() for the label, default to "New {levelName}"
-  $("newFolder").textContent = t("act.newFolder", `New ${levelName(kind)}`);
+  // Always use levelName for the label (empire theme shows New Sector / New Archive / New Division)
+  $("newFolder").textContent = `New ${levelName(kind)}`;
 }
 for (const id of ["view", "crumbs", "tree"])
   $(id).addEventListener("click", (e) => {
@@ -1387,6 +1378,7 @@ async function runEmpireBoot() {
   const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   empireBootRunning = true;
+  let skipped = false;
   const overlay = document.createElement("div");
   overlay.id = "empireBoot";
   overlay.innerHTML = '<div id="empireBootText"></div>';
@@ -1400,37 +1392,17 @@ async function runEmpireBoot() {
     { text: "Order will be maintained.", html: false },
   ];
 
-  if (prefersReduced) {
-    // Show all lines immediately
-    textEl.innerHTML = lines.map(l => l.text).join("<br>");
-    await new Promise((r) => setTimeout(r, 50));
-  } else {
-    // Type character by character, ~1.5s total
-    const totalChars = lines.reduce((sum, l) => sum + l.text.length, 0);
-    const totalTime = 1500;
-    const charDelay = totalTime / totalChars;
-    for (const line of lines) {
-      if (line.html) {
-        textEl.innerHTML += line.text;
-      } else {
-        for (const ch of line.text) {
-          textEl.innerHTML += esc(ch);
-          await new Promise((r) => setTimeout(r, charDelay));
-        }
-      }
-      textEl.innerHTML += "<br>";
-    }
-  }
-
-  // Skip on click or key
+  // Skip handlers - register at START so they work during typing
   const skip = () => {
     if (!empireBootRunning) return;
+    skipped = true;
     empireBootRunning = false;
     finishBoot();
   };
   overlay.addEventListener("click", skip, { once: true });
   const keyHandler = (e) => {
     if (!empireBootRunning) return;
+    skipped = true;
     empireBootRunning = false;
     finishBoot();
   };
@@ -1439,23 +1411,49 @@ async function runEmpireBoot() {
   function finishBoot() {
     overlay.removeEventListener("click", skip);
     document.removeEventListener("keydown", keyHandler);
-    applyTheme("empire");
-    overlay.classList.add("fade-out");
-    setTimeout(() => overlay.remove(), 200);
-    empireBootRunning = false;
+    try {
+      applyTheme("empire");
+    } finally {
+      overlay.classList.add("fade-out");
+      setTimeout(() => overlay.remove(), 200);
+      empireBootRunning = false;
+    }
   }
 
-  // Wait for animation to complete or skip
-  await new Promise((resolve) => {
-    const check = () => {
-      if (!empireBootRunning) {
-        resolve();
-      } else {
-        requestAnimationFrame(check);
+  if (prefersReduced) {
+    // Show all lines immediately
+    textEl.innerHTML = lines.map(l => l.text).join("<br>");
+    await new Promise((r) => setTimeout(r, 50));
+    // Auto-finish after a brief pause
+    await new Promise((r) => setTimeout(r, 300));
+    finishBoot();
+    return;
+  }
+
+  // Type character by character, ~1.5s total
+  const totalChars = lines.reduce((sum, l) => sum + l.text.length, 0);
+  const totalTime = 1500;
+  const charDelay = totalTime / totalChars;
+  for (const line of lines) {
+    if (skipped) break;
+    if (line.html) {
+      textEl.innerHTML += line.text;
+    } else {
+      for (const ch of line.text) {
+        if (skipped) break;
+        textEl.innerHTML += esc(ch);
+        await new Promise((r) => setTimeout(r, charDelay));
       }
-    };
-    check();
-  });
+    }
+    if (skipped) break;
+    textEl.innerHTML += "<br>";
+  }
+
+  // Auto-finish after typing completes
+  if (!skipped) {
+    await new Promise((r) => setTimeout(r, 300));
+    finishBoot();
+  }
 }
 
 // ---- Search ----
