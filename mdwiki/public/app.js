@@ -884,12 +884,8 @@ function renderActions() {
   const n = index.get(sel),
     ctx = ctxFolder(),
     d = ctx ? ctx.depth : 0;
-  const canAct = !!ctx && !editing;
   $("edit").disabled = !(n && n.type === "page") || editing;
-  $("newPage").disabled = !canAct;
-  $("newFolder").disabled = !canAct;
-  $("rename").disabled = !n || editing;
-  $("delete").disabled = !n || editing;
+  $("rename").disabled = $("delete").disabled = !n;
   const kinds = ["shelf", "book", "chapter"];
   const kind = kinds[d] || "folder";
   // Store kind in data attribute to avoid reading textContent
