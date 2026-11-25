@@ -151,7 +151,9 @@ const EMPIRE_TEXT = {
 function levelName(kind, plural = false) {
   const key = plural ? `level.${kind}.plural` : `level.${kind}`;
   const defaultLabel = plural ? LABEL[`${kind}Plural`] : LABEL[kind];
-  return t(key, defaultLabel);
+  // Never return undefined: if LABEL has no entry, capitalize the kind itself
+  const fallback = kind.charAt(0).toUpperCase() + kind.slice(1);
+  return t(key, defaultLabel ?? fallback);
 }
 const ico = (k) => `<svg><use href="#${ICON[k]}"/></svg>`;
 const store = {
@@ -887,7 +889,7 @@ function renderActions() {
   $("edit").disabled = !(n && n.type === "page") || editing;
   $("rename").disabled = $("delete").disabled = !n;
   const kinds = ["shelf", "book", "chapter"];
-  const kind = kinds[d] || "folder";
+  const kind = kinds[Math.min(d, kinds.length - 1)];
   // Store kind in data attribute to avoid reading textContent
   $("newFolder").dataset.kind = kind;
   // Always use levelName for the label (empire theme shows New Sector / New Archive / New Division)
@@ -953,7 +955,7 @@ $("newPage").onclick = async () => {
 };
 $("newFolder").onclick = async () => {
   const ctx = ctxFolder(),
-    kind = $("newFolder").dataset.kind || "folder",
+    kind = "chapter",
     what = levelName(kind);
   const promptKey = ctx ? "prompt.newFolder" : "prompt.newFolder.root";
   const promptTpl = t(promptKey, `Name of the new ${what}` + (ctx ? ` (in ${ctx.path})` : "") + ":");
